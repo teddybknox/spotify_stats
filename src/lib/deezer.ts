@@ -1,4 +1,7 @@
 import { useEffect, useState } from 'react';
+import { albumSearchUrl, norm, pickGenre, type DzAlbum } from './genre-core';
+
+export { norm };
 
 /**
  * Artist photos, album covers and artist genres from Deezer's public search API. It needs no key, and only
@@ -73,15 +76,6 @@ function jsonp(url: string): Promise<{ data?: unknown[] }> {
   });
 }
 
-export const norm = (s: string) =>
-  s
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/&/g, 'and')
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
-
 /** Drop edition noise so "Hunky Dory (2015 Remaster)" matches "Hunky Dory". */
 export function cleanAlbum(title: string): string {
   return title
@@ -94,60 +88,14 @@ interface DzArtist {
   name: string;
   picture_medium?: string;
 }
-interface DzAlbum {
-  title: string;
-  cover_medium?: string;
-  genre_id?: number;
-  artist?: { name: string };
-}
-
-// Deezer's top-level genres (from https://api.deezer.com/genre), so no extra request is needed.
-const GENRES: Record<number, string> = {
-  132: 'Pop',
-  116: 'Rap/Hip Hop',
-  122: 'Reggaeton',
-  152: 'Rock',
-  113: 'Dance',
-  165: 'R&B',
-  85: 'Alternative',
-  186: 'Christian',
-  106: 'Electro',
-  466: 'Folk',
-  144: 'Reggae',
-  129: 'Jazz',
-  84: 'Country',
-  67: 'Salsa',
-  65: 'Traditional Mexicano',
-  98: 'Classical',
-  173: 'Films/Games',
-  464: 'Metal',
-  169: 'Soul & Funk',
-  2: 'African Music',
-  12: 'Arabic Music',
-  16: 'Asian Music',
-  153: 'Blues',
-  75: 'Brazilian Music',
-  71: 'Cumbia',
-  81: 'Indian Music',
-  95: 'Kids',
-  197: 'Latin Music',
-};
 
 async function lookup(kind: Kind, artist: string, album: string): Promise<string | null> {
   if (kind === 'genre') {
     // Deezer has no genre on artists, so use the most common genre across their albums.
     const res = await limited(() =>
-      jsonp(`https://api.deezer.com/search/album?q=${encodeURIComponent(artist)}&limit=25`),
+      jsonp(albumSearchUrl(artist)),
     );
-    const counts = new Map<string, number>();
-    for (const h of (res.data ?? []) as DzAlbum[]) {
-      if (!h.artist || norm(h.artist.name) !== norm(artist)) continue;
-      const g = h.genre_id !== undefined ? GENRES[h.genre_id] : undefined;
-      if (g) counts.set(g, (counts.get(g) ?? 0) + 1);
-    }
-    let best: string | null = null;
-    for (const [g, c] of counts) if (best === null || c > counts.get(best)!) best = g;
-    return best;
+    return pickGenre((res.data ?? []) as DzAlbum[], artist);
   }
   if (kind === 'artist') {
     const res = await limited(() => jsonp(`https://api.deezer.com/search/artist?q=${encodeURIComponent(artist)}&limit=10`));
@@ -187,28 +135,69 @@ export function getImage(kind: Kind, artist: string, album = ''): Promise<string
   return p;
 }
 
-/** Look up many artists' genres; calls onUpdate with the growing map as answers arrive. */
-export function loadGenres(artists: string[], onUpdate: (genres: Map<string, string>, done: number) => void): () => void {
+let shared: Promise<void> | null = null;
+
+/**
+ * Load the artist -> genre file published with the site (public/genres.json, kept up to date by the
+ * "Update genres" GitHub Action) into the cache, so those artists never need a live lookup.
+ */
+export function loadSharedGenres(): Promise<void> {
+  shared ??= fetch('./genres.json')
+    .then((r) => (r.ok ? r.json() : { genres: {} }))
+    .then((file: { genres?: Record<string, string | null> }) => {
+      for (const [artist, genre] of Object.entries(file.genres ?? {})) {
+        const key = `genre|${artist}|`;
+        if (!(key in stored) || stored[key] === null) stored[key] = genre;
+      }
+    })
+    .catch(() => undefined);
+  return shared;
+}
+
+/**
+ * Genres for many artists (most-played first). Artists already known from the shared file or this
+ * browser's cache are filled in at once; of the rest, only the first `liveLimit` are looked up on Deezer.
+ * Calls onUpdate with the growing map and lookup progress. Returns a cancel function.
+ */
+export function loadGenres(
+  artists: string[],
+  liveLimit: number,
+  onUpdate: (genres: Map<string, string>, done: number, total: number) => void,
+): () => void {
   let cancelled = false;
   const genres = new Map<string, string>();
   let done = 0;
+  let total = 0;
   let pending = false;
   const flush = () => {
     if (pending) return;
     pending = true;
     setTimeout(() => {
       pending = false;
-      if (!cancelled) onUpdate(new Map(genres), done);
+      if (!cancelled) onUpdate(new Map(genres), done, total);
     }, 250);
   };
-  for (const a of artists) {
-    getImage('genre', a).then((g) => {
-      if (cancelled) return;
-      done++;
-      if (g) genres.set(a, g);
-      flush();
-    });
-  }
+  loadSharedGenres().then(() => {
+    if (cancelled) return;
+    const missing: string[] = [];
+    for (const a of artists) {
+      const key = `genre|${a}|`;
+      if (key in stored) {
+        const g = stored[key];
+        if (g) genres.set(a, g);
+      } else if (missing.length < liveLimit) missing.push(a);
+    }
+    total = missing.length;
+    flush();
+    for (const a of missing) {
+      getImage('genre', a).then((g) => {
+        if (cancelled) return;
+        done++;
+        if (g) genres.set(a, g);
+        flush();
+      });
+    }
+  });
   return () => {
     cancelled = true;
   };

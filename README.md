@@ -25,8 +25,8 @@ default, like Spotify's own counting).
 
 Spotify's export has no genres or images, so these come from Deezer's public API, which needs no account or key.
 Only artist and album names are sent, and answers are cached in the browser. Genres are Deezer's broad categories
-(Rock, Pop, Jazz, ...) per artist, taken as the most common genre across that artist's albums, and only your 300
-most-played artists are looked up.
+(Rock, Pop, Jazz, ...) per artist, taken as the most common genre across that artist's albums, and of artists missing from
+the shared file, only your 300 most-played are looked up live.
 
 ## Supported exports
 

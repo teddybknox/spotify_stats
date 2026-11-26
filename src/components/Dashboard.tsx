@@ -18,8 +18,8 @@ interface Props {
   onReset: () => void;
 }
 
-/** How many of your most-played artists get a genre lookup. */
-const GENRE_ARTISTS = 300;
+/** How many of your most-played artists missing from the shared genre file get a live lookup. */
+const LIVE_GENRE_LOOKUPS = 300;
 
 export default function Dashboard({ data, onReset }: Props) {
   const { plays } = data;
@@ -47,16 +47,16 @@ export default function Dashboard({ data, onReset }: Props) {
   // Genres are looked up only once someone asks for them.
   const wantGenres = filters.kind === 'music' && (dim === 'genre' || filters.focus?.by === 'genre');
   const genreArtists = useMemo(
-    () => (wantGenres ? topBy(kindPlays, 'artist', 'plays', GENRE_ARTISTS).map((r) => r.artist) : []),
+    () => (wantGenres ? topBy(kindPlays, 'artist', 'plays', Infinity).map((r) => r.artist) : []),
     [wantGenres, kindPlays],
   );
   const [genres, setGenres] = useState<GenreMap>(() => new Map());
-  const [genresDone, setGenresDone] = useState(0);
+  const [genreProgress, setGenreProgress] = useState({ done: 0, total: -1 });
   useEffect(() => {
     if (!genreArtists.length) return;
-    return loadGenres(genreArtists, (g, done) => {
+    return loadGenres(genreArtists, LIVE_GENRE_LOOKUPS, (g, done, total) => {
       setGenres(g);
-      setGenresDone(done);
+      setGenreProgress({ done, total });
     });
   }, [genreArtists]);
 
@@ -77,11 +77,12 @@ export default function Dashboard({ data, onReset }: Props) {
     if (dim !== 'genre') return undefined;
     const known = rankPlays.reduce((n, p) => n + (genres.has(p.artist) ? 1 : 0), 0);
     const pct = rankPlays.length ? Math.round((known / rankPlays.length) * 100) : 0;
-    const loading = genresDone < genreArtists.length;
-    return loading
-      ? `Looking up genres on Deezer… ${genresDone} of ${genreArtists.length} artists. Covers ${pct}% of plays so far.`
+    const { done, total } = genreProgress;
+    if (total < 0) return 'Loading genres…';
+    return done < total
+      ? `Looking up genres on Deezer… ${done} of ${total} artists. Covers ${pct}% of plays so far.`
       : `Genres come from Deezer, by artist. Known for ${pct}% of plays in this range; the rest are left out.`;
-  }, [dim, rankPlays, genres, genresDone, genreArtists.length]);
+  }, [dim, rankPlays, genres, genreProgress]);
 
   const isMusic = filters.kind === 'music';
   const noun = DIM_LABELS[dim][filters.kind].toLowerCase();
