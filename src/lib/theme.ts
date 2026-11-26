@@ -23,13 +23,26 @@ export type Palette = typeof LIGHT;
 
 const mq = () => window.matchMedia('(prefers-color-scheme: dark)');
 
+/** Dark when the page is explicitly themed dark, or follows a dark OS setting. */
+function isDark(): boolean {
+  const forced = document.documentElement.getAttribute('data-theme');
+  if (forced === 'dark') return true;
+  if (forced === 'light') return false;
+  return mq().matches;
+}
+
 export function usePalette(): Palette {
-  const [dark, setDark] = useState(() => mq().matches);
+  const [dark, setDark] = useState(isDark);
   useEffect(() => {
     const m = mq();
-    const on = () => setDark(m.matches);
+    const on = () => setDark(isDark());
     m.addEventListener('change', on);
-    return () => m.removeEventListener('change', on);
+    const obs = new MutationObserver(on);
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => {
+      m.removeEventListener('change', on);
+      obs.disconnect();
+    };
   }, []);
   return dark ? DARK : LIGHT;
 }
