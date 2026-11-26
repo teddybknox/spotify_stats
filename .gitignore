@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.local
+.DS_Store
+
+# Personal listening data: never commit it
+*.zip
+Streaming_History*.json
+StreamingHistory*.json
+endsong*.json
+endvideo*.json
+my_spotify_data*/
