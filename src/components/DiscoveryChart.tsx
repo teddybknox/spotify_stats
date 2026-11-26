@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import Card from './Card';
 import { TipBox } from './ChartTooltip';
-import { artistDiscovery } from '../lib/stats';
+import { discovery, type Dim, type GenreMap } from '../lib/stats';
 import { fmtInt } from '../lib/format';
 import { usePalette } from '../lib/theme';
 import type { Play } from '../lib/types';
@@ -12,13 +12,20 @@ interface Props {
   allPlays: Play[];
   from: string;
   to: string;
+  by: Dim;
+  /** Plural name, e.g. "artists". */
+  noun: string;
+  genres?: GenreMap;
 }
 
-export default function DiscoveryChart({ allPlays, from, to }: Props) {
+export default function DiscoveryChart({ allPlays, from, to, by, noun, genres }: Props) {
   const pal = usePalette();
-  const data = useMemo(() => artistDiscovery(allPlays, from, to), [allPlays, from, to]);
+  const data = useMemo(() => discovery(allPlays, from, to, by, genres), [allPlays, from, to, by, genres]);
   return (
-    <Card title="New artists each year" subtitle="Artists you played for the first time ever, next to ones you already knew.">
+    <Card
+      title={`New ${noun} each year`}
+      subtitle={`${noun[0].toUpperCase() + noun.slice(1)} you played for the first time ever, next to ones you already knew.`}
+    >
       <ul className="legend">
         <li>
           <span className="swatch" style={{ background: pal.series[0] }} />
@@ -44,16 +51,16 @@ export default function DiscoveryChart({ allPlays, from, to }: Props) {
                   <TipBox
                     title={String(p.year)}
                     rows={[
-                      { label: 'New to you', value: fmtInt(p.newArtists), color: pal.series[0] },
-                      { label: 'Already knew', value: fmtInt(p.returningArtists), color: pal.other },
+                      { label: 'New to you', value: fmtInt(p.fresh), color: pal.series[0] },
+                      { label: 'Already knew', value: fmtInt(p.returning), color: pal.other },
                     ]}
                   />
                 );
               }}
             />
-            <Bar dataKey="newArtists" stackId="a" fill={pal.series[0]} maxBarSize={48} isAnimationActive={false} stroke={pal.surface} strokeWidth={1} />
+            <Bar dataKey="fresh" stackId="a" fill={pal.series[0]} maxBarSize={48} isAnimationActive={false} stroke={pal.surface} strokeWidth={1} />
             <Bar
-              dataKey="returningArtists"
+              dataKey="returning"
               stackId="a"
               fill={pal.other}
               radius={[4, 4, 0, 0]}

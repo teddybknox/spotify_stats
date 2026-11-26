@@ -81,8 +81,11 @@ export default function Upload({ onFiles, loading, error }: Props) {
         <div>
           <h2>Getting your data</h2>
           <p>
-            On spotify.com go to <em>Account → Account privacy</em>, tick <em>Extended streaming history</em> and
-            request it. Spotify emails a zip within a few weeks. The quicker <em>Account data</em> export works too, but
+            Open your{' '}
+            <a href="https://www.spotify.com/us/account/privacy/" target="_blank" rel="noreferrer">
+              Spotify account privacy page
+            </a>
+            , tick <em>Extended streaming history</em> and request it. Spotify emails a zip within a few weeks. The quicker <em>Account data</em> export works too, but
             it only covers the last year.
           </p>
         </div>

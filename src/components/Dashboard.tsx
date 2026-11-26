@@ -7,6 +7,7 @@ import TopOverTime from './TopOverTime';
 import Heatmap from './Heatmap';
 import YearChart from './YearChart';
 import DiscoveryChart from './DiscoveryChart';
+import PeriodTable from './PeriodTable';
 import { applyFilters, itemKey, summarize, topBy, type Dim, type Filters, type GenreMap, type Metric } from '../lib/stats';
 import { loadGenres } from '../lib/deezer';
 import { fmtDay } from '../lib/format';
@@ -151,7 +152,23 @@ export default function Dashboard({ data, onReset }: Props) {
             })
           }
         />
-        {isMusic && !filters.focus && <DiscoveryChart allPlays={kindPlays} from={filters.from} to={filters.to} />}
+        <DiscoveryChart
+          allPlays={filters.focus && filters.focus.by !== dim ? yearPlays : kindPlays}
+          from={filters.from}
+          to={filters.to}
+          by={dim}
+          noun={noun}
+          genres={genres}
+        />
+        <PeriodTable
+          plays={filtered}
+          from={filters.from}
+          to={filters.to}
+          metric={metric}
+          showThumbs={isMusic}
+          isMusic={isMusic}
+          onPick={(focus) => setFilters({ ...filters, focus })}
+        />
       </div>
 
       <footer className="foot muted">
