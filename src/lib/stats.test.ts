@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { enrich } from './parse';
-import { albumKey, applyFilters, artistDiscovery, topOverTime, dailyTotals, daysBetween, monthsBetween, topBy, weekHourGrid } from './stats';
+import { albumKey, applyFilters, topPerPeriod, discovery, topOverTime, dailyTotals, daysBetween, monthsBetween, topBy, weekHourGrid } from './stats';
 import type { Kind } from './types';
 
 const H = 3_600_000;
@@ -91,12 +91,34 @@ describe('weekHourGrid', () => {
   });
 });
 
-describe('artistDiscovery', () => {
+describe('discovery', () => {
   it('counts artists heard for the first time each year', () => {
-    const r = artistDiscovery(plays.filter((p) => p.kind === 'music'), '2022-01-01', '2023-12-31');
+    const r = discovery(plays.filter((p) => p.kind === 'music'), '2022-01-01', '2023-12-31');
     expect(r).toEqual([
-      { year: 2022, newArtists: 1, returningArtists: 0 },
-      { year: 2023, newArtists: 3, returningArtists: 0 },
+      { year: 2022, fresh: 1, returning: 0 },
+      { year: 2023, fresh: 3, returning: 0 },
+    ]);
+    const genres = new Map([['Old Band', 'Rock'], ['A', 'Rock'], ['B', 'Jazz']]);
+    expect(discovery(plays.filter((p) => p.kind === 'music'), '2022-01-01', '2023-12-31', 'genre', genres)).toEqual([
+      { year: 2022, fresh: 1, returning: 0 },
+      { year: 2023, fresh: 1, returning: 1 },
+    ]);
+  });
+});
+
+describe('topPerPeriod', () => {
+  it('finds the top artist, album and track of each month, including empty months', () => {
+    const music = plays.filter((p) => p.kind === 'music');
+    const r = topPerPeriod(music, '2022-12-01', '2023-02-28', 'month', 'plays');
+    expect(r.map((x) => x.period)).toEqual(['2022-12', '2023-01', '2023-02']);
+    expect(r[1].artist?.label).toBe('B');
+    expect(r[1].track).toMatchObject({ label: 'a1', sub: 'A', plays: 2 }); // tie with b2, broken alphabetically
+    expect(r[1].album?.label).toBe('B LP');
+    expect(r[2]).toMatchObject({ plays: 0, artist: null, album: null, track: null });
+    const years = topPerPeriod(music, '2022-06-01', '2023-06-01', 'year', 'hours');
+    expect(years.map((x) => [x.period, x.artist?.label])).toEqual([
+      ['2022', 'Old Band'],
+      ['2023', 'A'],
     ]);
   });
 });

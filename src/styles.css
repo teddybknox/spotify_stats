@@ -183,3 +183,28 @@ code { font-size: 0.9em; background: var(--accent-soft); padding: 1px 5px; borde
 @keyframes pulse { 50% { opacity: 0.5; } }
 @media (prefers-reduced-motion: reduce) { .thumb.loading { animation: none; } }
 .toplist .row.with-thumb { grid-template-columns: 28px 40px minmax(0, 1fr) auto; }
+
+.help a { color: var(--accent); }
+.help a:hover { text-decoration-thickness: 2px; }
+
+/* Top of each period */
+.pt-wrap { overflow-x: auto; max-height: 640px; overflow-y: auto; }
+.pt { width: 100%; border-collapse: collapse; min-width: 640px; font-size: 0.9rem; }
+.pt thead th {
+  position: sticky; top: 0; z-index: 1; background: var(--surface);
+  text-align: left; font-size: 0.8rem; font-weight: 600; color: var(--text-2); padding: 6px 8px; border-bottom: 1px solid var(--border);
+}
+.pt tbody th { text-align: left; font-weight: 600; white-space: nowrap; padding: 6px 8px; vertical-align: middle; width: 110px; }
+.pt tbody th .pt-sub { display: block; font-weight: 400; }
+.pt td { padding: 2px 4px; vertical-align: middle; width: 30%; max-width: 0; }
+.pt tbody tr + tr > * { border-top: 1px solid var(--border); }
+.pt-item {
+  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+  background: transparent; border: 0; border-radius: 8px; padding: 4px;
+}
+.pt-item:hover { background: var(--accent-soft); }
+.pt-item .thumb { width: 32px; height: 32px; }
+.pt-text { display: flex; flex-direction: column; min-width: 0; }
+.pt-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pt-sub { color: var(--text-2); font-size: 0.78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pt-empty { color: var(--text-2); padding-left: 12px; }

@@ -254,26 +254,65 @@ export function byYear(plays: Play[]): YearPoint[] {
 
 export interface DiscoveryPoint {
   year: number;
-  newArtists: number;
-  returningArtists: number;
+  /** Items heard for the first time ever that year. */
+  fresh: number;
+  /** Items heard that year that had already been heard in an earlier year. */
+  returning: number;
 }
 
-/** For each year: how many artists you heard for the first time ever vs. ones you already knew. */
-export function artistDiscovery(allPlays: Play[], from: string, to: string): DiscoveryPoint[] {
+/**
+ * For each year in range: how many artists (or tracks, albums, genres) you heard for the first time
+ * ever, vs. ones you already knew. `allPlays` must cover all time and be sorted by time.
+ */
+export function discovery(allPlays: Play[], from: string, to: string, by: Dim = 'artist', genres?: GenreMap): DiscoveryPoint[] {
   const firstYear = new Map<string, number>();
-  for (const p of allPlays) if (!firstYear.has(p.artist)) firstYear.set(p.artist, p.year);
   const perYear = new Map<number, Set<string>>();
   for (const p of allPlays) {
+    const k = itemKey(p, by, genres);
+    if (k === null) continue;
+    if (!firstYear.has(k)) firstYear.set(k, p.year);
     if (p.day < from || p.day > to) continue;
     let s = perYear.get(p.year);
     if (!s) perYear.set(p.year, (s = new Set()));
-    s.add(p.artist);
+    s.add(k);
   }
   return [...perYear.entries()]
     .sort((a, b) => a[0] - b[0])
     .map(([year, set]) => {
       let n = 0;
-      for (const a of set) if (firstYear.get(a) === year) n++;
-      return { year, newArtists: n, returningArtists: set.size - n };
+      for (const k of set) if (firstYear.get(k) === year) n++;
+      return { year, fresh: n, returning: set.size - n };
     });
+}
+
+export type Unit = 'year' | 'month';
+
+export interface PeriodTop {
+  period: string; // '2024' or '2024-03'
+  plays: number;
+  hours: number;
+  artist: Ranked | null;
+  album: Ranked | null;
+  track: Ranked | null;
+}
+
+/** The top artist, album and track of every year or month from `from` to `to` (empty periods included). */
+export function topPerPeriod(plays: Play[], from: string, to: string, unit: Unit, metric: Metric): PeriodTop[] {
+  const periods =
+    unit === 'month'
+      ? monthsBetween(from.slice(0, 7), to.slice(0, 7))
+      : Array.from({ length: Number(to.slice(0, 4)) - Number(from.slice(0, 4)) + 1 }, (_, i) => String(Number(from.slice(0, 4)) + i));
+  const groups = new Map<string, Play[]>(periods.map((p) => [p, []]));
+  for (const p of plays) groups.get(unit === 'month' ? p.month : String(p.year))?.push(p);
+  return periods.map((period) => {
+    const ps = groups.get(period)!;
+    return {
+      period,
+      plays: ps.length,
+      hours: ps.reduce((h, p) => h + p.ms / HOUR_MS, 0),
+      artist: topBy(ps, 'artist', metric, 1)[0] ?? null,
+      album: topBy(ps, 'album', metric, 1)[0] ?? null,
+      track: topBy(ps, 'track', metric, 1)[0] ?? null,
+    };
+  });
 }
