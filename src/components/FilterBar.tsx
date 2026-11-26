@@ -1,5 +1,7 @@
-import type { Filters } from '../lib/stats';
+import type { Dim, Filters } from '../lib/stats';
 import type { Kind } from '../lib/types';
+import type { Measure } from '../lib/format';
+import { Segmented } from './Card';
 
 interface Props {
   filters: Filters;
@@ -8,14 +10,26 @@ interface Props {
   maxDay: string;
   years: number[];
   hasPodcasts: boolean;
+  measure: Measure;
+  setMeasure: (m: Measure) => void;
+  dim: Dim;
+  setDim: (d: Dim) => void;
 }
+
+export const DIM_LABELS: Record<Dim, { music: string; podcast: string }> = {
+  artist: { music: 'Artists', podcast: 'Shows' },
+  track: { music: 'Tracks', podcast: 'Episodes' },
+  album: { music: 'Albums', podcast: '' },
+  genre: { music: 'Genres', podcast: '' },
+};
 
 function shiftYear(day: string, years: number): string {
   const [y, m, d] = day.split('-');
   return `${Number(y) + years}-${m}-${d}`;
 }
 
-export default function FilterBar({ filters, setFilters, minDay, maxDay, years, hasPodcasts }: Props) {
+export default function FilterBar({ filters, setFilters, minDay, maxDay, years, hasPodcasts, measure, setMeasure, dim, setDim }: Props) {
+  const dims = (Object.keys(DIM_LABELS) as Dim[]).filter((d) => DIM_LABELS[d][filters.kind]);
   const set = (patch: Partial<Filters>) => setFilters({ ...filters, ...patch });
   const clamp = (d: string) => (d < minDay ? minDay : d > maxDay ? maxDay : d);
   const last12From = clamp(shiftYear(maxDay, -1));
@@ -40,6 +54,29 @@ export default function FilterBar({ filters, setFilters, minDay, maxDay, years, 
         ))}
       </div>
       <div className="filter-row">
+        <div className="measure">
+          Measure by
+          <Segmented
+            label="Measure by"
+            value={measure}
+            onChange={setMeasure}
+            options={[
+              { value: 'plays', label: 'Plays' },
+              { value: 'hours', label: 'Time' },
+            ]}
+          />
+        </div>
+        <div className="measure">
+          Rank
+          <Segmented
+            label="Rank"
+            value={dim}
+            onChange={setDim}
+            options={dims.map((d) => ({ value: d, label: DIM_LABELS[d][filters.kind] }))}
+          />
+        </div>
+      </div>
+      <div className="filter-row">
         <label>
           From
           <input
@@ -62,8 +99,15 @@ export default function FilterBar({ filters, setFilters, minDay, maxDay, years, 
         </label>
         {hasPodcasts && (
           <label>
-            Show
-            <select value={filters.kind} onChange={(e) => set({ kind: e.target.value as Kind, artist: null })}>
+            Listening to
+            <select
+              value={filters.kind}
+              onChange={(e) => {
+                const kind = e.target.value as Kind;
+                set({ kind, focus: null });
+                if (!DIM_LABELS[dim][kind]) setDim('artist');
+              }}
+            >
               <option value="music">Music</option>
               <option value="podcast">Podcasts</option>
             </select>
@@ -77,9 +121,9 @@ export default function FilterBar({ filters, setFilters, minDay, maxDay, years, 
             <option value={60}>1 minute</option>
           </select>
         </label>
-        {filters.artist && (
-          <button className="chip on removable" onClick={() => set({ artist: null })} aria-label="Clear artist filter">
-            {filters.artist} <span aria-hidden>×</span>
+        {filters.focus && (
+          <button className="chip on removable" onClick={() => set({ focus: null })} aria-label="Clear focus">
+            {filters.focus.label} <span aria-hidden>×</span>
           </button>
         )}
       </div>

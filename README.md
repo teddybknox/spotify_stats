@@ -6,16 +6,27 @@ Everything runs in the browser: the zip is unpacked and analysed on your own mac
 
 ## What it shows
 
-- Headline numbers: hours, plays, artists and tracks for the selected range
-- Hours listened per day, with a 1 / 7 / 30 / 90-day moving average
-- Top artists over time (monthly, top 3 / 5 / 8 plus "Other"), as hours or share
-- Top artists, tracks and albums, ranked by plays or time
-- When you listen: weekday × hour heatmap in your local time zone
-- Hours per year (click a bar to zoom into that year)
-- New artists discovered each year
+Two switches at the top drive the whole page:
 
-Filters apply to every chart: a date range (presets for each year), music vs podcasts, a minimum play length
-(30 seconds by default, like Spotify's own counting), and an artist focus (click an artist in Top artists).
+- **Measure by**: plays or listening time.
+- **Rank**: artists, tracks, albums or genres. This switches the two main panels: a monthly "top over time" chart
+  (top 3 / 5 / 8 plus "Other", as totals or share) and a ranked top 10 / 25 / 50 list.
+
+Click any row in the ranked list to focus every chart on that artist, track, album or genre.
+
+Also on the page: headline numbers, a weekday × hour heatmap in your local time zone, plays or hours per day with a
+1 / 7 / 30 / 90-day moving average, totals per year (click a bar to zoom into that year), and new artists discovered
+each year.
+
+Filters: a date range (with a preset for each year), music or podcasts, and a minimum play length (30 seconds by
+default, like Spotify's own counting).
+
+### Pictures and genres
+
+Spotify's export has no genres or images, so these come from Deezer's public API, which needs no account or key.
+Only artist and album names are sent, and answers are cached in the browser. Genres are Deezer's broad categories
+(Rock, Pop, Jazz, ...) per artist, taken as the most common genre across that artist's albums, and only your 300
+most-played artists are looked up.
 
 ## Supported exports
 

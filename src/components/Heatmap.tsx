@@ -1,16 +1,16 @@
 import { useMemo, useState } from 'react';
 import Card from './Card';
-import { weekHourGrid } from '../lib/stats';
-import { fmtHours } from '../lib/format';
+import { weekHourGrid, type Metric } from '../lib/stats';
+import { fmtMeasure } from '../lib/format';
 import { rampColor, usePalette } from '../lib/theme';
 import type { Play } from '../lib/types';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const hourLabel = (h: number) => (h === 0 ? '12am' : h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h - 12}pm`);
 
-export default function Heatmap({ plays }: { plays: Play[] }) {
+export default function Heatmap({ plays, metric }: { plays: Play[]; metric: Metric }) {
   const pal = usePalette();
-  const grid = useMemo(() => weekHourGrid(plays), [plays]);
+  const grid = useMemo(() => weekHourGrid(plays, metric), [plays, metric]);
   const max = Math.max(0.0001, ...grid.flat());
   const [hover, setHover] = useState<{ d: number; h: number } | null>(null);
 
@@ -21,13 +21,13 @@ export default function Heatmap({ plays }: { plays: Play[] }) {
   }, [grid]);
 
   const readout = hover
-    ? `${DAYS[hover.d]}s, ${hourLabel(hover.h)}–${hourLabel((hover.h + 1) % 24)}: ${fmtHours(grid[hover.d][hover.h])}`
+    ? `${DAYS[hover.d]}s, ${hourLabel(hover.h)}–${hourLabel((hover.h + 1) % 24)}: ${fmtMeasure(grid[hover.d][hover.h], metric)}`
     : peak.v > 0
       ? `Busiest: ${DAYS[peak.d]}s around ${hourLabel(peak.h)}`
       : 'No listening in this range';
 
   return (
-    <Card title="When you listen" subtitle="Total hours by weekday and hour, in your current time zone.">
+    <Card title="When you listen" subtitle={`Total ${metric === 'plays' ? 'plays' : 'hours'} by weekday and hour, in your current time zone.`}>
       <div className="heatmap" onMouseLeave={() => setHover(null)}>
         <div className="hm-corner" />
         {Array.from({ length: 24 }, (_, h) => (
@@ -44,7 +44,7 @@ export default function Heatmap({ plays }: { plays: Play[] }) {
                 className={`hm-cell${hover && hover.d === d && hover.h === h ? ' hot' : ''}`}
                 style={{ background: v > 0 ? rampColor(pal, v / max) : undefined }}
                 onMouseEnter={() => setHover({ d, h })}
-                title={`${DAYS[d]} ${hourLabel(h)}: ${fmtHours(v)}`}
+                title={`${DAYS[d]} ${hourLabel(h)}: ${fmtMeasure(v, metric)}`}
               />
             ))}
           </div>

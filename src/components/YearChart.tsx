@@ -2,21 +2,22 @@ import { useMemo } from 'react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import Card from './Card';
 import { TipBox } from './ChartTooltip';
-import { byYear } from '../lib/stats';
-import { fmtHours, fmtInt } from '../lib/format';
+import { byYear, type Metric } from '../lib/stats';
+import { fmtAxis, fmtHours, fmtInt } from '../lib/format';
 import { usePalette } from '../lib/theme';
 import type { Play } from '../lib/types';
 
 interface Props {
   plays: Play[];
   onPickYear: (year: number) => void;
+  metric: Metric;
 }
 
-export default function YearChart({ plays, onPickYear }: Props) {
+export default function YearChart({ plays, onPickYear, metric }: Props) {
   const pal = usePalette();
   const data = useMemo(() => byYear(plays), [plays]);
   return (
-    <Card title="Hours per year" subtitle="Click a year to zoom every chart into it.">
+    <Card title={metric === 'plays' ? 'Plays per year' : 'Hours per year'} subtitle="Click a year to zoom every chart into it.">
       <div className="chart" style={{ height: 260 }}>
         <ResponsiveContainer>
           <BarChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
@@ -28,7 +29,7 @@ export default function YearChart({ plays, onPickYear }: Props) {
               tickLine={false}
               axisLine={false}
               width={56}
-              tickFormatter={(v: number) => `${fmtInt(v)}h`}
+              tickFormatter={(v: number) => fmtAxis(v, metric)}
             />
             <Tooltip
               cursor={{ fill: pal.grid, opacity: 0.6 }}
@@ -39,15 +40,15 @@ export default function YearChart({ plays, onPickYear }: Props) {
                   <TipBox
                     title={String(p.year)}
                     rows={[
-                      { label: 'Listened', value: fmtHours(p.hours), color: pal.series[0] },
-                      { label: 'Plays', value: fmtInt(p.plays) },
+                      { label: 'Plays', value: fmtInt(p.plays), color: metric === 'plays' ? pal.series[0] : undefined },
+                      { label: 'Listened', value: fmtHours(p.hours), color: metric === 'hours' ? pal.series[0] : undefined },
                     ]}
                   />
                 );
               }}
             />
             <Bar
-              dataKey="hours"
+              dataKey={metric}
               fill={pal.series[0]}
               radius={[4, 4, 0, 0]}
               maxBarSize={48}

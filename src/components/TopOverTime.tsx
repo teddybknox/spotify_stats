@@ -2,36 +2,48 @@ import { useMemo, useState } from 'react';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import Card, { Segmented } from './Card';
 import { TipBox } from './ChartTooltip';
-import { artistsOverTime } from '../lib/stats';
-import { fmtHours, fmtMonth, fmtMonthShort } from '../lib/format';
+import { topOverTime, type Dim, type GenreMap, type Metric, type Series } from '../lib/stats';
+import { fmtAxis, fmtMeasure, fmtMonth, fmtMonthShort } from '../lib/format';
 import { usePalette } from '../lib/theme';
 import type { Play } from '../lib/types';
 
-type Mode = 'hours' | 'share';
+type Mode = 'total' | 'share';
 
-export default function ArtistsOverTime({ plays, from, to }: { plays: Play[]; from: string; to: string }) {
+interface Props {
+  plays: Play[];
+  from: string;
+  to: string;
+  metric: Metric;
+  by: Dim;
+  /** Plural name shown in titles, e.g. "artists". */
+  noun: string;
+  genres?: GenreMap;
+  note?: string;
+}
+
+export default function TopOverTime({ plays, from, to, metric, by, noun, genres, note }: Props) {
   const pal = usePalette();
   const [n, setN] = useState(5);
-  const [mode, setMode] = useState<Mode>('hours');
-  const { series, rows } = useMemo(() => artistsOverTime(plays, from, to, n), [plays, from, to, n]);
+  const [mode, setMode] = useState<Mode>('total');
+  const { series, rows } = useMemo(() => topOverTime(plays, from, to, n, metric, by, genres), [plays, from, to, n, metric, by, genres]);
 
   const data = useMemo(() => {
-    if (mode === 'hours') return rows;
+    if (mode === 'total') return rows;
     return rows.map((r) => {
-      const total = series.reduce((s, k) => s + (r[k] as number), 0);
+      const total = series.reduce((s, x) => s + (r[x.key] as number), 0);
       const out: Record<string, number | string> = { month: r.month };
-      for (const k of series) out[k] = total ? ((r[k] as number) / total) * 100 : 0;
+      for (const x of series) out[x.key] = total ? ((r[x.key] as number) / total) * 100 : 0;
       return out;
     });
   }, [rows, series, mode]);
 
-  const color = (k: string, i: number) => (k === 'Other' ? pal.other : pal.series[i]);
+  const color = (x: Series, i: number) => (x.key === 'Other' ? pal.other : pal.series[i]);
 
   return (
     <Card
       wide
-      title="Top artists over time"
-      subtitle="Monthly listening for your top artists in this range. Everyone else is grouped as Other."
+      title={`Top ${noun} over time`}
+      subtitle={note ?? `Monthly ${metric === 'plays' ? 'plays' : 'hours'} for your top ${noun} in this range. Everything else is grouped as Other.`}
       controls={
         <>
           <Segmented
@@ -39,12 +51,12 @@ export default function ArtistsOverTime({ plays, from, to }: { plays: Play[]; fr
             value={mode}
             onChange={setMode}
             options={[
-              { value: 'hours', label: 'Hours' },
+              { value: 'total', label: metric === 'plays' ? 'Plays' : 'Hours' },
               { value: 'share', label: 'Share' },
             ]}
           />
           <Segmented
-            label="Artists"
+            label={`Number of ${noun}`}
             value={n}
             onChange={setN}
             options={[
@@ -57,10 +69,10 @@ export default function ArtistsOverTime({ plays, from, to }: { plays: Play[]; fr
       }
     >
       <ul className="legend">
-        {series.map((k, i) => (
-          <li key={k}>
-            <span className="swatch" style={{ background: color(k, i) }} />
-            {k}
+        {series.map((x, i) => (
+          <li key={x.key} title={x.sub ? `${x.label} by ${x.sub}` : x.label}>
+            <span className="swatch" style={{ background: color(x, i) }} />
+            {x.label}
           </li>
         ))}
       </ul>
@@ -83,7 +95,7 @@ export default function ArtistsOverTime({ plays, from, to }: { plays: Play[]; fr
               axisLine={false}
               width={56}
               domain={mode === 'share' ? [0, 100] : [0, 'auto']}
-              tickFormatter={(v: number) => (mode === 'share' ? `${v}%` : `${v}h`)}
+              tickFormatter={(v: number) => (mode === 'share' ? `${v}%` : fmtAxis(v, metric))}
             />
             <Tooltip
               cursor={{ stroke: pal.axis, strokeDasharray: '3 3' }}
@@ -91,35 +103,36 @@ export default function ArtistsOverTime({ plays, from, to }: { plays: Play[]; fr
                 if (!active || !payload?.length) return null;
                 const r = rows.find((x) => x.month === label);
                 if (!r) return null;
-                const total = series.reduce((s, k) => s + (r[k] as number), 0);
+                const total = series.reduce((s, x) => s + (r[x.key] as number), 0);
                 return (
                   <TipBox
                     title={fmtMonth(String(label))}
-                    rows={[...series]
-                      .map((k, i) => ({ k, i }))
+                    rows={series
+                      .map((x, i) => ({ x, i }))
                       .reverse()
-                      .map(({ k, i }) => ({
-                        label: k,
-                        color: color(k, i),
+                      .map(({ x, i }) => ({
+                        label: x.label,
+                        color: color(x, i),
                         value:
                           mode === 'share'
-                            ? `${total ? Math.round(((r[k] as number) / total) * 100) : 0}%`
-                            : fmtHours(r[k] as number),
+                            ? `${total ? Math.round(((r[x.key] as number) / total) * 100) : 0}%`
+                            : fmtMeasure(r[x.key] as number, metric),
                       }))}
-                    foot={`Total ${fmtHours(total)}`}
+                    foot={`Total ${fmtMeasure(total, metric)}`}
                   />
                 );
               }}
             />
-            {series.map((k, i) => (
+            {series.map((x, i) => (
               <Area
-                key={k}
+                key={x.key}
                 type="linear"
-                dataKey={k}
+                dataKey={x.key}
+                name={x.label}
                 stackId="1"
                 stroke={pal.surface}
                 strokeWidth={1}
-                fill={color(k, i)}
+                fill={color(x, i)}
                 fillOpacity={1}
                 isAnimationActive={false}
               />

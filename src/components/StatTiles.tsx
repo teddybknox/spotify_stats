@@ -4,7 +4,7 @@ import type { Summary } from '../lib/stats';
 export default function StatTiles({ s, kind }: { s: Summary; kind: 'music' | 'podcast' }) {
   const perDay = s.days ? s.hours / s.days : 0;
   const tiles = [
-    { label: 'Hours listened', value: fmtInt(s.hours), note: `${perDay.toFixed(1)} h a day on average` },
+    { label: 'Hours listened', value: fmtInt(s.hours), note: `${perDay >= 0.1 ? `${perDay.toFixed(1)} h` : `${Math.round(perDay * 60)} min`} a day on average` },
     { label: 'Plays', value: fmtInt(s.plays), note: `on ${fmtInt(s.activeDays)} of ${fmtInt(s.days)} days` },
     { label: kind === 'music' ? 'Artists' : 'Shows', value: fmtInt(s.artists), note: '' },
     { label: kind === 'music' ? 'Different tracks' : 'Episodes', value: fmtInt(s.tracks), note: '' },

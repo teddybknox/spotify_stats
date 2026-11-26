@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { enrich } from './parse';
-import { applyFilters, artistDiscovery, artistsOverTime, dailyHours, daysBetween, monthsBetween, topBy, weekHourGrid } from './stats';
+import { albumKey, applyFilters, artistDiscovery, topOverTime, dailyTotals, daysBetween, monthsBetween, topBy, weekHourGrid } from './stats';
 import type { Kind } from './types';
 
 const H = 3_600_000;
@@ -27,11 +27,14 @@ describe('dates', () => {
 
 describe('applyFilters', () => {
   it('filters by date, kind, minimum length and artist', () => {
-    const base = { from: '2023-01-01', to: '2023-12-31', kind: 'music' as Kind, minSeconds: 30, artist: null };
+    const base = { from: '2023-01-01', to: '2023-12-31', kind: 'music' as Kind, minSeconds: 30, focus: null };
     expect(applyFilters(plays, base)).toHaveLength(5);
     expect(applyFilters(plays, { ...base, minSeconds: 0 })).toHaveLength(6);
-    expect(applyFilters(plays, { ...base, artist: 'B' })).toHaveLength(3);
+    expect(applyFilters(plays, { ...base, focus: { by: 'artist', key: 'B', label: 'B' } })).toHaveLength(3);
     expect(applyFilters(plays, { ...base, kind: 'podcast' })).toHaveLength(1);
+    const genres = new Map([['A', 'Rock'], ['B', 'Jazz']]);
+    expect(applyFilters(plays, { ...base, focus: { by: 'genre', key: 'Jazz', label: 'Jazz' } }, genres)).toHaveLength(3);
+    expect(applyFilters(plays, { ...base, focus: { by: 'album', key: albumKey('B', 'B LP'), label: 'B LP' } })).toHaveLength(3);
   });
 });
 
@@ -47,21 +50,37 @@ describe('topBy', () => {
   });
 });
 
-describe('dailyHours', () => {
-  it('fills empty days with zero before averaging', () => {
-    const d = dailyHours(plays.slice(1, 4), '2023-01-01', '2023-01-03', 2);
-    expect(d.map((x) => x.hours)).toEqual([2, 0, 0.25]);
-    expect(d.map((x) => x.avg)).toEqual([2, 1, 0.125]);
+describe('topBy genre', () => {
+  it('groups by artist genre and skips artists without one', () => {
+    const genres = new Map([['A', 'Rock'], ['B', 'Rock'], ['Old Band', 'Jazz']]);
+    const r = topBy(plays, 'genre', 'plays', 5, genres);
+    expect(r.map((x) => [x.label, x.plays])).toEqual([
+      ['Rock', 5],
+      ['Jazz', 1],
+    ]);
   });
 });
 
-describe('artistsOverTime', () => {
+describe('dailyTotals', () => {
+  it('fills empty days with zero before averaging', () => {
+    const d = dailyTotals(plays.slice(1, 4), '2023-01-01', '2023-01-03', 2);
+    expect(d.map((x) => x.value)).toEqual([2, 0, 0.25]);
+    expect(d.map((x) => x.avg)).toEqual([2, 1, 0.125]);
+    expect(dailyTotals(plays.slice(1, 4), '2023-01-01', '2023-01-03', 1, 'plays').map((x) => x.value)).toEqual([2, 0, 1]);
+  });
+});
+
+describe('topOverTime', () => {
   it('keeps the top artists and folds the rest into Other', () => {
-    const r = artistsOverTime(plays.filter((p) => p.kind === 'music'), '2022-12-01', '2023-01-31', 1);
-    expect(r.series).toEqual(['A', 'Other']);
+    const r = topOverTime(plays.filter((p) => p.kind === 'music'), '2022-12-01', '2023-01-31', 1);
+    expect(r.series.map((x) => x.label)).toEqual(['A', 'Other']);
     expect(r.rows).toHaveLength(2);
-    expect(r.rows[1].A).toBe(2);
+    expect(r.rows[1].s0).toBe(2);
     expect(r.rows[0].Other).toBe(0.25);
+    const byPlays = topOverTime(plays.filter((p) => p.kind === 'music'), '2022-12-01', '2023-01-31', 1, 'plays');
+    expect(byPlays.series[0].label).toBe('B');
+    const albums = topOverTime(plays.filter((p) => p.kind === 'music'), '2022-12-01', '2023-01-31', 1, 'hours', 'album');
+    expect(albums.series[0]).toMatchObject({ label: 'A LP', sub: 'A' });
   });
 });
 

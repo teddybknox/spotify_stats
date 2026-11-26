@@ -2,33 +2,37 @@ import { useMemo, useState } from 'react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import Card, { Segmented } from './Card';
 import { TipBox } from './ChartTooltip';
-import { dailyHours } from '../lib/stats';
-import { fmtDay, fmtHours, fmtMonthShort } from '../lib/format';
+import { dailyTotals, type Metric } from '../lib/stats';
+import { fmtAxis, fmtDay, fmtMeasure, fmtMonthShort, niceStep } from '../lib/format';
 import { usePalette } from '../lib/theme';
 import type { Play } from '../lib/types';
 
-export default function DailyChart({ plays, from, to }: { plays: Play[]; from: string; to: string }) {
+interface Props {
+  plays: Play[];
+  from: string;
+  to: string;
+  metric: Metric;
+}
+
+export default function DailyChart({ plays, from, to, metric }: Props) {
   const [window, setWindow] = useState(7);
   const pal = usePalette();
-  const data = useMemo(() => dailyHours(plays, from, to, window), [plays, from, to, window]);
+  const data = useMemo(() => dailyTotals(plays, from, to, window, metric), [plays, from, to, window, metric]);
   const long = data.length > 400;
-  const yMax = useMemo(() => {
-    const m = Math.max(0, ...data.map((d) => d.avg));
-    const step = m > 8 ? 5 : m > 4 ? 2 : m > 2 ? 1 : 0.5;
-    return Math.max(step, Math.ceil(m / step) * step);
-  }, [data]);
   const ticks = useMemo(() => {
-    const step = yMax > 20 ? 10 : yMax > 8 ? 5 : yMax > 4 ? 2 : yMax > 2 ? 1 : 0.5;
-    const out: number[] = [];
-    for (let v = 0; v <= yMax + 1e-9; v += step) out.push(v);
+    const max = Math.max(0, ...data.map((d) => d.avg));
+    const step = metric === 'plays' ? Math.max(1, niceStep(max)) : niceStep(max);
+    const out: number[] = [0];
+    while (out[out.length - 1] < max - 1e-9) out.push(+(out[out.length - 1] + step).toFixed(6));
+    if (out.length === 1) out.push(step);
     return out;
-  }, [yMax]);
+  }, [data, metric]);
 
   return (
     <Card
       wide
-      title="Hours listened per day"
-      subtitle={`${window}-day moving average`}
+      title={metric === 'plays' ? 'Plays per day' : 'Hours listened per day'}
+      subtitle={window > 1 ? `${window}-day moving average` : 'Each day on its own'}
       controls={
         <Segmented
           label="Smoothing"
@@ -61,21 +65,22 @@ export default function DailyChart({ plays, from, to }: { plays: Play[]; from: s
               tickLine={false}
               axisLine={false}
               width={56}
-              domain={[0, yMax]}
+              domain={[0, ticks[ticks.length - 1]]}
               ticks={ticks}
-              tickFormatter={(v: number) => `${v}h`}
+              tickFormatter={(v: number) => fmtAxis(v, metric)}
             />
             <Tooltip
               cursor={{ stroke: pal.axis, strokeDasharray: '3 3' }}
               content={({ active, payload }) => {
                 if (!active || !payload?.length) return null;
                 const p = payload[0].payload as (typeof data)[number];
+                const avg = metric === 'plays' ? `${p.avg.toFixed(1)} plays` : fmtMeasure(p.avg, metric);
                 return (
                   <TipBox
                     title={fmtDay(p.day)}
                     rows={[
-                      ...(window > 1 ? [{ label: `${window}-day average`, value: fmtHours(p.avg), color: pal.series[0] }] : []),
-                      { label: 'That day', value: fmtHours(p.hours) },
+                      ...(window > 1 ? [{ label: `${window}-day average`, value: avg, color: pal.series[0] }] : []),
+                      { label: 'That day', value: fmtMeasure(p.value, metric) },
                     ]}
                   />
                 );
