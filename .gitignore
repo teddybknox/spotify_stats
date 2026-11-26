@@ -10,3 +10,4 @@ StreamingHistory*.json
 endsong*.json
 endvideo*.json
 my_spotify_data*/
+*.tsbuildinfo
