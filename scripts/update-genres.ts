@@ -10,6 +10,8 @@ import { albumSearchUrl, pickGenre, type DzAlbum } from '../src/lib/genre-core';
 const GENRES_FILE = 'public/genres.json';
 const QUEUE_FILE = 'data/genre-queue.txt';
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** Stop and save before the GitHub job's time limit; whatever is left stays queued for the next run. */
+const BUDGET_MS = Number(process.env.GENRE_BUDGET_MINUTES ?? 45) * 60_000;
 
 interface GenreFile {
   about: string;
@@ -42,8 +44,13 @@ async function main() {
   console.log(`${queue.length} queued, ${todo.length} not yet known`);
 
   let found = 0;
+  const start = Date.now();
   try {
     for (const [i, artist] of todo.entries()) {
+      if (Date.now() - start > BUDGET_MS) {
+        console.log(`Time budget used up after ${i} lookups`);
+        break;
+      }
       const g = await lookup(artist);
       file.genres[artist] = g;
       if (g) found++;
