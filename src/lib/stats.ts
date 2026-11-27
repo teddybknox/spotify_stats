@@ -1,4 +1,5 @@
 import type { Kind, Play } from './types';
+import type { Genre } from './genre-core';
 import { decadeOf } from './release-core';
 
 export const HOUR_MS = 3_600_000;
@@ -17,7 +18,7 @@ export interface Filters {
   focus: Focus | null;
 }
 
-export type Dim = 'artist' | 'track' | 'album' | 'genre' | 'decade';
+export type Dim = 'artist' | 'track' | 'album' | 'genre' | 'subgenre' | 'decade';
 
 export interface Focus {
   by: Dim;
@@ -25,8 +26,10 @@ export interface Focus {
   label: string;
 }
 
-/** Artist name -> genre name. */
-export type GenreMap = Map<string, string>;
+/** Artist name -> two-level genre. */
+export type GenreMap = Map<string, Genre>;
+
+export const isGenreDim = (d: Dim) => d === 'genre' || d === 'subgenre';
 
 /** Albums are identified by artist + title, since titles like "Greatest Hits" repeat. */
 export const albumKey = (artist: string, album: string) => artist + '\u0000' + album;
@@ -41,7 +44,9 @@ export function itemKey(p: Play, by: Dim, genres?: GenreMap): string | null {
     case 'album':
       return p.album ? albumKey(p.artist, p.album) : null;
     case 'genre':
-      return genres?.get(p.artist) ?? null;
+      return genres?.get(p.artist)?.top ?? null;
+    case 'subgenre':
+      return genres?.get(p.artist)?.sub ?? null;
     case 'decade':
       return p.released ? decadeOf(p.released) : null;
   }
@@ -110,7 +115,7 @@ export function topBy(plays: Play[], by: Dim, metric: Metric, n: number, genres?
       r = {
         key,
         label: by === 'artist' ? p.artist : by === 'track' ? p.track : by === 'album' ? p.album : key,
-        sub: by === 'track' || by === 'album' ? p.artist : '',
+        sub: by === 'track' || by === 'album' ? p.artist : by === 'subgenre' ? (genres?.get(p.artist)?.top ?? '') : '',
         artist: p.artist,
         album: p.album,
         plays: 0,

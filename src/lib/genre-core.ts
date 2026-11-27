@@ -68,3 +68,52 @@ export function pickGenre(albums: DzAlbum[], artist: string): string | null {
 }
 
 export const albumSearchUrl = (q: string) => `https://api.deezer.com/search/album?q=${encodeURIComponent(q)}&limit=25`;
+
+/** An artist's genre in two levels, e.g. { top: 'Jazz', sub: 'Hard Bop' }. */
+export interface Genre {
+  top: string;
+  sub: string;
+}
+
+/** Closest top-level genre for each Deezer genre, used only for artists Claude hasn't classified. */
+const DEEZER_TO_TOP: Record<string, string> = {
+  Pop: 'Pop',
+  'Rap/Hip Hop': 'Hip-Hop',
+  Alternative: 'Rock',
+  Rock: 'Rock',
+  Metal: 'Metal',
+  Jazz: 'Jazz',
+  Blues: 'Blues',
+  Electro: 'Electronic',
+  Dance: 'Electronic',
+  'R&B': 'R&B & Soul',
+  'Soul & Funk': 'R&B & Soul',
+  Country: 'Country',
+  Folk: 'Folk',
+  Classical: 'Classical',
+  'Films/Games': 'Soundtrack',
+  Christian: 'Gospel & Christian',
+  Reggae: 'Reggae & Caribbean',
+  Reggaeton: 'Latin',
+  'Latin Music': 'Latin',
+  'Brazilian Music': 'Latin',
+  Salsa: 'Latin',
+  Cumbia: 'Latin',
+  'Traditional Mexicano': 'Latin',
+  'Asian Music': 'World',
+  'Indian Music': 'World',
+  'African Music': 'World',
+  'Arabic Music': 'World',
+  Kids: 'Other',
+};
+
+/**
+ * Read one value from the genre file or cache: "Top|Sub" from Claude's classification, or a bare
+ * Deezer genre name (from a live lookup), which is filed under the closest top-level genre.
+ */
+export function parseGenre(value: string): Genre {
+  const bar = value.indexOf('|');
+  if (bar >= 0) return { top: value.slice(0, bar), sub: value.slice(bar + 1) };
+  const top = DEEZER_TO_TOP[value] ?? 'Other';
+  return { top, sub: `${top} (unsorted)` };
+}
