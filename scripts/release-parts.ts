@@ -5,7 +5,7 @@ export type Years = Record<string, Record<string, number | null>>;
 
 export const PARTS_DIR = 'data/releases';
 
-/** Every file in data/releases merged. Files are read alphabetically and a later found year wins, so
+/** Every file in data/releases merged (used to skip albums already looked up). Files are read alphabetically and a later found year wins, so
  * musicbrainz.json overrides deezer.json; null never overrides a year. */
 export function readParts(): Years {
   const all: Years = {};
