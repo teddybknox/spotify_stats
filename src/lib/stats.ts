@@ -1,4 +1,5 @@
 import type { Kind, Play } from './types';
+import { decadeOf } from './release-core';
 
 export const HOUR_MS = 3_600_000;
 
@@ -12,11 +13,11 @@ export interface Filters {
   to: string; // YYYY-MM-DD inclusive
   kind: Kind;
   minSeconds: number;
-  /** When set, every chart only counts plays of this one artist, track, album or genre. */
+  /** When set, every chart only counts plays of this one artist, track, album, genre or decade. */
   focus: Focus | null;
 }
 
-export type Dim = 'artist' | 'track' | 'album' | 'genre';
+export type Dim = 'artist' | 'track' | 'album' | 'genre' | 'decade';
 
 export interface Focus {
   by: Dim;
@@ -41,6 +42,8 @@ export function itemKey(p: Play, by: Dim, genres?: GenreMap): string | null {
       return p.album ? albumKey(p.artist, p.album) : null;
     case 'genre':
       return genres?.get(p.artist) ?? null;
+    case 'decade':
+      return p.released ? decadeOf(p.released) : null;
   }
 }
 

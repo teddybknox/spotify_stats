@@ -13,6 +13,8 @@ export interface Play {
   /** Album name ('' when the export doesn't include it). */
   album: string;
   kind: Kind;
+  /** Year the album first came out, filled in once it's been looked up (see lib/releases.ts). */
+  released?: number;
   /** null when the export doesn't say. */
   skipped: boolean | null;
   // Derived in the viewer's local time zone:

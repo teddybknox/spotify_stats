@@ -25,6 +25,7 @@ export const DIM_LABELS: Record<Dim, { music: string; podcast: string }> = {
   track: { music: 'Tracks', podcast: 'Episodes' },
   album: { music: 'Albums', podcast: '' },
   genre: { music: 'Genres', podcast: '' },
+  decade: { music: 'Decades', podcast: '' },
 };
 
 function shiftYear(day: string, years: number): string {
