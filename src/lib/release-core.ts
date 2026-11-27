@@ -115,15 +115,20 @@ export async function lookupMb(artist: string, album: string, getJson: GetJson):
   return pickMbYear(mb['release-groups'] ?? [], artist, album);
 }
 
+/** Titles that say they're a reissue, whose date on Deezer is the reissue's, not the original's. */
+export const isReissue = (title: string) => /remaster|anniversary|deluxe|expanded|legacy edition|reissue/i.test(title);
+
 /**
- * Deezer: the earliest release date among this artist's editions of the album on Deezer. Deezer often
- * only has a remaster, so this can be later than the original; MusicBrainz years take priority.
+ * Deezer: the earliest release date among this artist's editions of the album on Deezer. Deezer's dates
+ * are for the edition it carries, so remastered editions are ignored (better no year than a 2015 Revolver),
+ * and MusicBrainz years take priority over these.
  */
 export async function lookupDz(artist: string, album: string, getJson: GetJson): Promise<number | null> {
+  if (isReissue(album)) return null;
   const search = (await getJson(dzSearchUrl(artist, album))) as { data?: DzAlbumHit[]; error?: { code?: number } };
   if (search.error) throw new ServiceError(`Deezer error ${search.error.code}`);
   let best: number | null = null;
-  for (const hit of pickDzAlbums(search.data ?? [], artist, album)) {
+  for (const hit of pickDzAlbums((search.data ?? []).filter((h) => !isReissue(h.title)), artist, album)) {
     const full = (await getJson(dzAlbumUrl(hit.id))) as { release_date?: string; error?: { code?: number } };
     if (full.error) throw new ServiceError(`Deezer error ${full.error.code}`);
     const y = yearOf(full.release_date);

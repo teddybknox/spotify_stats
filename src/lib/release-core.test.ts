@@ -63,6 +63,15 @@ describe('release years', () => {
     ];
     expect(pickDzAlbums(hits, 'Anderson .Paak', 'Malibu').map((h) => h.id)).toEqual([2]);
   });
+  it('ignores remastered editions on Deezer', async () => {
+    const get = async (url: string) => {
+      if (url.includes('musicbrainz')) return { 'release-groups': [] };
+      if (url.includes('search/album')) return { data: [{ id: 1, title: 'Revolver (Remastered)', artist: { name: 'The Beatles' } }] };
+      throw new Error(url);
+    };
+    expect(await lookupYear('The Beatles', 'Revolver', get)).toEqual({ year: null, source: null });
+    expect(await lookupYear('The Beatles', 'Revolver (Remastered 2009)', get)).toEqual({ year: null, source: null });
+  });
   it('falls back to Deezer when MusicBrainz has nothing', async () => {
     const get = async (url: string) => {
       if (url.includes('musicbrainz')) return { 'release-groups': [] };

@@ -2,7 +2,7 @@ name: Update release years
 
 # Looks up the year each album in data/release-queue.txt first came out (MusicBrainz, else Deezer).
 # One job per service, each at that service's own rate limit, committing data/releases/<service>.json
-# every 15 minutes until done. The site prefers MusicBrainz years (original releases) over Deezer's.
+# every 10 minutes until done. The site prefers MusicBrainz years (original releases) over Deezer's.
 on:
   workflow_dispatch:
   push:
@@ -25,7 +25,7 @@ jobs:
         source: [deezer, musicbrainz]
     env:
       SOURCE: ${{ matrix.source }}
-      RELEASE_BUDGET_MINUTES: 15
+      RELEASE_BUDGET_MINUTES: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
