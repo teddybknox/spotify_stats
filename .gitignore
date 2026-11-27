@@ -11,3 +11,6 @@ endsong*.json
 endvideo*.json
 my_spotify_data*/
 *.tsbuildinfo
+
+# Generated from data/releases by scripts/build-releases.ts
+public/releases.json

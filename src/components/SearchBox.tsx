@@ -30,7 +30,7 @@ export default function SearchBox({ index, kind, onPick, onActivate, genresLoadi
     input.current?.blur();
   };
 
-  const placeholder = kind === 'music' ? 'Search artists, tracks, albums, genres' : 'Search shows and episodes';
+  const placeholder = kind === 'music' ? 'Search artists, tracks, albums, genres, decades' : 'Search shows and episodes';
 
   return (
     <div className="search">

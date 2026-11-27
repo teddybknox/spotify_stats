@@ -20,7 +20,7 @@ interface Props {
 
 function RowThumb({ by, r }: { by: Dim; r: Ranked }) {
   if (by === 'artist') return <Thumb kind="artist" artist={r.artist} label={r.label} />;
-  if (isGenreDim(by) || !r.album) return null;
+  if (isGenreDim(by) || by === 'decade' || !r.album) return null;
   return <Thumb kind="album" artist={r.artist} album={r.album} label={r.album} />;
 }
 
@@ -28,7 +28,7 @@ export default function TopList({ title, plays, by, metric, genres, onPick, focu
   const [n, setN] = useState(10);
   const rows = useMemo(() => topBy(plays, by, metric, n, genres), [plays, by, metric, n, genres]);
   const max = rows.length ? rows[0][metric] : 1;
-  const thumbs = showThumbs && !isGenreDim(by);
+  const thumbs = showThumbs && !isGenreDim(by) && by !== 'decade';
 
   return (
     <Card

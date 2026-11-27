@@ -159,3 +159,15 @@ describe('search', () => {
     expect(searchIndex(index, 'taylor')).toEqual([]);
   });
 });
+
+describe('topBy decade', () => {
+  it('groups by album release decade and skips albums without a year', () => {
+    const years: Record<string, number> = { A: 1977, B: 1971, 'Old Band': 2004 };
+    const withYears = plays.map((p) => (years[p.artist] ? { ...p, released: years[p.artist] } : p));
+    const r = topBy(withYears, 'decade', 'plays', 5);
+    expect(r.map((x) => [x.label, x.plays])).toEqual([
+      ['1970s', 5],
+      ['2000s', 1],
+    ]);
+  });
+});

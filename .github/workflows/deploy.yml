@@ -4,9 +4,9 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
-  # Commits made by the "Update genres" job don't trigger a push run, so redeploy after it.
+  # Commits made by the "Update genres" and "Update release years" jobs don't trigger a push run, so redeploy after them.
   workflow_run:
-    workflows: [Update genres]
+    workflows: [Update genres, Update release years]
     types: [completed]
     branches: [main]
 

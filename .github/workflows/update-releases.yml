@@ -1,0 +1,58 @@
+name: Update release years
+
+# Looks up the year each album in data/release-queue.txt first came out (MusicBrainz, else Deezer).
+# One job per service, each at that service's own rate limit, committing data/releases/<service>.json
+# every 10 minutes until done. The site prefers MusicBrainz years (original releases) over Deezer's.
+on:
+  workflow_dispatch:
+  push:
+    paths: [data/release-queue.txt, .github/workflows/update-releases.yml]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-releases-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        source: [deezer, musicbrainz]
+    env:
+      SOURCE: ${{ matrix.source }}
+      RELEASE_BUDGET_MINUTES: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Look up release years, committing as it goes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898341+github-actions[bot]@users.noreply.github.com"
+          start=$(date +%s)
+          while :; do
+            : > "$RUNNER_TEMP/out"
+            GITHUB_OUTPUT="$RUNNER_TEMP/out" npx tsx scripts/update-releases.ts
+            left=$(sed -n 's/^left=//p' "$RUNNER_TEMP/out")
+            progress=$(sed -n 's/^progress=//p' "$RUNNER_TEMP/out")
+            git add data/releases
+            if ! git diff --cached --quiet; then
+              git commit -q -m "Update album release years ($SOURCE)"
+              # The other job pushes its own file meanwhile; each only touches its own.
+              for i in 1 2 3 4 5 6; do
+                git pull -q --rebase origin ${{ github.ref_name }} && git push -q origin HEAD:${{ github.ref_name }} && break
+                sleep $((i * 7))
+              done
+            fi
+            if [ "${left:-1}" = "0" ]; then echo "Shard done"; break; fi
+            if [ "${progress:-0}" = "0" ]; then echo "No progress this round; stopping"; exit 1; fi
+            if [ $(( $(date +%s) - start )) -gt $(( 330 * 60 )) ]; then echo "Out of time; run the workflow again to continue"; break; fi
+          done
