@@ -82,6 +82,11 @@ describe('topOverTime', () => {
     const albums = topOverTime(plays.filter((p) => p.kind === 'music'), '2022-12-01', '2023-01-31', 1, 'hours', 'album');
     expect(albums.series[0]).toMatchObject({ label: 'A LP', sub: 'A' });
   });
+  it('groups by year', () => {
+    const r = topOverTime(plays.filter((p) => p.kind === 'music'), '2022-12-01', '2023-01-31', 1, 'hours', 'artist', undefined, 'year');
+    expect(r.rows.map((x) => x.period)).toEqual(['2022', '2023']);
+    expect(r.rows[1].s0).toBe(2);
+  });
 });
 
 describe('weekHourGrid', () => {
@@ -95,14 +100,19 @@ describe('discovery', () => {
   it('counts artists heard for the first time each year', () => {
     const r = discovery(plays.filter((p) => p.kind === 'music'), '2022-01-01', '2023-12-31');
     expect(r).toEqual([
-      { year: 2022, fresh: 1, returning: 0 },
-      { year: 2023, fresh: 3, returning: 0 },
+      { period: '2022', fresh: 1, returning: 0 },
+      { period: '2023', fresh: 3, returning: 0 },
     ]);
     const genres = new Map([['Old Band', 'Rock'], ['A', 'Rock'], ['B', 'Jazz']]);
     expect(discovery(plays.filter((p) => p.kind === 'music'), '2022-01-01', '2023-12-31', 'genre', genres)).toEqual([
-      { year: 2022, fresh: 1, returning: 0 },
-      { year: 2023, fresh: 1, returning: 1 },
+      { period: '2022', fresh: 1, returning: 0 },
+      { period: '2023', fresh: 1, returning: 1 },
     ]);
+  });
+  it('counts by month, including empty months', () => {
+    const r = discovery(plays.filter((p) => p.kind === 'music'), '2022-12-01', '2023-02-28', 'artist', undefined, 'month');
+    expect(r.map((x) => x.period)).toEqual(['2022-12', '2023-01', '2023-02']);
+    expect(r[2]).toEqual({ period: '2023-02', fresh: 0, returning: 0 });
   });
 });
 

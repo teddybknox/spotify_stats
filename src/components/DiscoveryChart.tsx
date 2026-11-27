@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Area, Bar, CartesianGrid, ComposedChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import Card from './Card';
 import { TipBox } from './ChartTooltip';
-import { discovery, type Dim, type GenreMap } from '../lib/stats';
-import { fmtInt } from '../lib/format';
+import { discovery, type Dim, type GenreMap, type Unit } from '../lib/stats';
+import { fmtInt, fmtPeriod, fmtPeriodShort } from '../lib/format';
 import { usePalette } from '../lib/theme';
 import type { Play } from '../lib/types';
 
@@ -16,60 +16,84 @@ interface Props {
   /** Plural name, e.g. "artists". */
   noun: string;
   genres?: GenreMap;
+  unit: Unit;
 }
 
-export default function DiscoveryChart({ allPlays, from, to, by, noun, genres }: Props) {
+export default function DiscoveryChart({ allPlays, from, to, by, noun, genres, unit }: Props) {
   const pal = usePalette();
-  const data = useMemo(() => discovery(allPlays, from, to, by, genres), [allPlays, from, to, by, genres]);
+  const data = useMemo(() => discovery(allPlays, from, to, by, genres, unit), [allPlays, from, to, by, genres, unit]);
+  const layers = [
+    { key: 'fresh', label: 'New to you', color: pal.series[0] },
+    { key: 'returning', label: 'Already knew', color: pal.other },
+  ] as const;
   return (
     <Card
-      title={`New ${noun} each year`}
+      wide
+      title={`New ${noun} each ${unit}`}
       subtitle={`${noun[0].toUpperCase() + noun.slice(1)} you played for the first time ever, next to ones you already knew.`}
     >
       <ul className="legend">
-        <li>
-          <span className="swatch" style={{ background: pal.series[0] }} />
-          New to you
-        </li>
-        <li>
-          <span className="swatch" style={{ background: pal.other }} />
-          Already knew
-        </li>
+        {layers.map((l) => (
+          <li key={l.key}>
+            <span className="swatch" style={{ background: l.color }} />
+            {l.label}
+          </li>
+        ))}
       </ul>
       <div className="chart" style={{ height: 232 }}>
         <ResponsiveContainer>
-          <BarChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+          <ComposedChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
             <CartesianGrid stroke={pal.grid} vertical={false} />
-            <XAxis dataKey="year" stroke={pal.axis} tick={{ fontSize: 12, fill: pal.axis }} tickLine={false} />
-            <YAxis stroke={pal.axis} tick={{ fontSize: 12, fill: pal.axis }} tickLine={false} axisLine={false} width={56} />
+            <XAxis
+              dataKey="period"
+              stroke={pal.axis}
+              tick={{ fontSize: 12, fill: pal.axis }}
+              tickLine={false}
+              minTickGap={unit === 'month' ? 30 : 4}
+              tickFormatter={fmtPeriodShort}
+            />
+            <YAxis stroke={pal.axis} tick={{ fontSize: 12, fill: pal.axis }} tickLine={false} axisLine={false} width={56} allowDecimals={false} />
             <Tooltip
-              cursor={{ fill: pal.grid, opacity: 0.6 }}
+              cursor={unit === 'month' ? { stroke: pal.axis, strokeDasharray: '3 3' } : { fill: pal.grid, opacity: 0.6 }}
               content={({ active, payload }) => {
                 if (!active || !payload?.length) return null;
                 const p = payload[0].payload as (typeof data)[number];
                 return (
                   <TipBox
-                    title={String(p.year)}
-                    rows={[
-                      { label: 'New to you', value: fmtInt(p.fresh), color: pal.series[0] },
-                      { label: 'Already knew', value: fmtInt(p.returning), color: pal.other },
-                    ]}
+                    title={fmtPeriod(p.period)}
+                    rows={layers.map((l) => ({ label: l.label, value: fmtInt(p[l.key]), color: l.color }))}
                   />
                 );
               }}
             />
-            <Bar dataKey="fresh" stackId="a" fill={pal.series[0]} maxBarSize={48} isAnimationActive={false} stroke={pal.surface} strokeWidth={1} />
-            <Bar
-              dataKey="returning"
-              stackId="a"
-              fill={pal.other}
-              radius={[4, 4, 0, 0]}
-              maxBarSize={48}
-              isAnimationActive={false}
-              stroke={pal.surface}
-              strokeWidth={1}
-            />
-          </BarChart>
+            {layers.map((l, i) =>
+              unit === 'month' ? (
+                <Area
+                  key={l.key}
+                  type="linear"
+                  dataKey={l.key}
+                  stackId="a"
+                  fill={l.color}
+                  fillOpacity={1}
+                  stroke={pal.surface}
+                  strokeWidth={1}
+                  isAnimationActive={false}
+                />
+              ) : (
+                <Bar
+                  key={l.key}
+                  dataKey={l.key}
+                  stackId="a"
+                  fill={l.color}
+                  radius={i === layers.length - 1 ? [4, 4, 0, 0] : undefined}
+                  maxBarSize={48}
+                  isAnimationActive={false}
+                  stroke={pal.surface}
+                  strokeWidth={1}
+                />
+              ),
+            )}
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
     </Card>

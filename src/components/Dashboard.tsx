@@ -6,10 +6,9 @@ import TopList from './TopList';
 import DailyChart from './DailyChart';
 import TopOverTime from './TopOverTime';
 import Heatmap from './Heatmap';
-import YearChart from './YearChart';
 import DiscoveryChart from './DiscoveryChart';
 import PeriodTable from './PeriodTable';
-import { applyFilters, buildSearchIndex, itemKey, summarize, topBy, type Dim, type Filters, type GenreMap, type Metric } from '../lib/stats';
+import { applyFilters, buildSearchIndex, itemKey, summarize, topBy, type Dim, type Filters, type GenreMap, type Metric, type Unit } from '../lib/stats';
 import { loadGenres } from '../lib/deezer';
 import { fmtDay } from '../lib/format';
 import type { ParseResult } from '../lib/types';
@@ -38,6 +37,7 @@ export default function Dashboard({ data, onReset }: Props) {
   });
   const [metric, setMetric] = useState<Metric>('plays');
   const [dim, setDim] = useState<Dim>('artist');
+  const [unit, setUnit] = useState<Unit>('month');
 
   // Everything except the date range and focus: used where "all time" context matters.
   const kindPlays = useMemo(
@@ -123,6 +123,8 @@ export default function Dashboard({ data, onReset }: Props) {
         setMeasure={setMetric}
         dim={dim}
         setDim={setDim}
+        unit={unit}
+        setUnit={setUnit}
         search={
           <SearchBox
             index={searchIdx}
@@ -146,6 +148,7 @@ export default function Dashboard({ data, onReset }: Props) {
           noun={noun}
           genres={genres}
           note={genreNote}
+          unit={unit}
         />
         <TopList
           title={`Top ${noun}`}
@@ -160,17 +163,6 @@ export default function Dashboard({ data, onReset }: Props) {
         />
         <Heatmap plays={filtered} metric={metric} />
         <DailyChart plays={filtered} from={filters.from} to={filters.to} metric={metric} />
-        <YearChart
-          plays={yearPlays}
-          metric={metric}
-          onPickYear={(y) =>
-            setFilters({
-              ...filters,
-              from: `${y}-01-01` < minDay ? minDay : `${y}-01-01`,
-              to: `${y}-12-31` > maxDay ? maxDay : `${y}-12-31`,
-            })
-          }
-        />
         <DiscoveryChart
           allPlays={filters.focus && filters.focus.by !== dim ? yearPlays : kindPlays}
           from={filters.from}
@@ -178,6 +170,7 @@ export default function Dashboard({ data, onReset }: Props) {
           by={dim}
           noun={noun}
           genres={genres}
+          unit={unit}
         />
         <PeriodTable
           plays={filtered}
@@ -186,6 +179,7 @@ export default function Dashboard({ data, onReset }: Props) {
           metric={metric}
           showThumbs={isMusic}
           isMusic={isMusic}
+          unit={unit}
           onPick={(focus) => setFilters({ ...filters, focus })}
         />
       </div>

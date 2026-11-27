@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { Dim, Filters } from '../lib/stats';
+import type { Dim, Filters, Unit } from '../lib/stats';
 import type { Kind } from '../lib/types';
 import type { Measure } from '../lib/format';
 import { Segmented } from './Card';
@@ -16,6 +16,8 @@ interface Props {
   dim: Dim;
   setDim: (d: Dim) => void;
   search?: ReactNode;
+  unit: Unit;
+  setUnit: (u: Unit) => void;
 }
 
 export const DIM_LABELS: Record<Dim, { music: string; podcast: string }> = {
@@ -30,7 +32,7 @@ function shiftYear(day: string, years: number): string {
   return `${Number(y) + years}-${m}-${d}`;
 }
 
-export default function FilterBar({ filters, setFilters, minDay, maxDay, years, hasPodcasts, measure, setMeasure, dim, setDim, search }: Props) {
+export default function FilterBar({ filters, setFilters, minDay, maxDay, years, hasPodcasts, measure, setMeasure, dim, setDim, search, unit, setUnit }: Props) {
   const dims = (Object.keys(DIM_LABELS) as Dim[]).filter((d) => DIM_LABELS[d][filters.kind]);
   const set = (patch: Partial<Filters>) => setFilters({ ...filters, ...patch });
   const clamp = (d: string) => (d < minDay ? minDay : d > maxDay ? maxDay : d);
@@ -76,6 +78,18 @@ export default function FilterBar({ filters, setFilters, minDay, maxDay, years, 
             value={dim}
             onChange={setDim}
             options={dims.map((d) => ({ value: d, label: DIM_LABELS[d][filters.kind] }))}
+          />
+        </div>
+        <div className="measure">
+          Group by
+          <Segmented
+            label="Group by"
+            value={unit}
+            onChange={setUnit}
+            options={[
+              { value: 'month', label: 'Month' },
+              { value: 'year', label: 'Year' },
+            ]}
           />
         </div>
       </div>
