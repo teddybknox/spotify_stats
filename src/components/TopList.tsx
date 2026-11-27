@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import Card, { Segmented } from './Card';
 import Thumb from './Thumb';
 import { fmtHours, fmtInt } from '../lib/format';
-import { topBy, type Dim, type Focus, type GenreMap, type Metric, type Ranked } from '../lib/stats';
+import { isGenreDim, topBy, type Dim, type Focus, type GenreMap, type Metric, type Ranked } from '../lib/stats';
 import type { Play } from '../lib/types';
 
 interface Props {
@@ -20,7 +20,7 @@ interface Props {
 
 function RowThumb({ by, r }: { by: Dim; r: Ranked }) {
   if (by === 'artist') return <Thumb kind="artist" artist={r.artist} label={r.label} />;
-  if (by === 'genre' || !r.album) return null;
+  if (isGenreDim(by) || !r.album) return null;
   return <Thumb kind="album" artist={r.artist} album={r.album} label={r.album} />;
 }
 
@@ -28,7 +28,7 @@ export default function TopList({ title, plays, by, metric, genres, onPick, focu
   const [n, setN] = useState(10);
   const rows = useMemo(() => topBy(plays, by, metric, n, genres), [plays, by, metric, n, genres]);
   const max = rows.length ? rows[0][metric] : 1;
-  const thumbs = showThumbs && by !== 'genre';
+  const thumbs = showThumbs && !isGenreDim(by);
 
   return (
     <Card

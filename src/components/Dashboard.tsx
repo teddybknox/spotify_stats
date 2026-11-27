@@ -8,7 +8,7 @@ import TopOverTime from './TopOverTime';
 import Heatmap from './Heatmap';
 import DiscoveryChart from './DiscoveryChart';
 import PeriodTable from './PeriodTable';
-import { applyFilters, buildSearchIndex, itemKey, summarize, topBy, type Dim, type Filters, type GenreMap, type Metric, type Unit } from '../lib/stats';
+import { applyFilters, buildSearchIndex, isGenreDim, itemKey, summarize, topBy, type Dim, type Filters, type GenreMap, type Metric, type Unit } from '../lib/stats';
 import { loadGenres } from '../lib/deezer';
 import { fmtDay } from '../lib/format';
 import type { ParseResult } from '../lib/types';
@@ -47,7 +47,8 @@ export default function Dashboard({ data, onReset }: Props) {
 
   // Genres are looked up only once someone asks for them.
   const [searching, setSearching] = useState(false);
-  const wantGenres = filters.kind === 'music' && (dim === 'genre' || filters.focus?.by === 'genre' || searching);
+  const wantGenres =
+    filters.kind === 'music' && (isGenreDim(dim) || (filters.focus !== null && isGenreDim(filters.focus.by)) || searching);
   const genreArtists = useMemo(
     () => (wantGenres ? topBy(kindPlays, 'artist', 'plays', Infinity).map((r) => r.artist) : []),
     [wantGenres, kindPlays],
@@ -69,32 +70,50 @@ export default function Dashboard({ data, onReset }: Props) {
     return buildSearchIndex(kindPlays, dims, genres);
   }, [searching, kindPlays, filters.kind, genres]);
 
+  // Drill-down: focusing one genre turns the genre panels into its sub-genres.
+  const focus = filters.focus;
+  const drill = dim === 'genre' && focus !== null && isGenreDim(focus.by);
+  const viewDim: Dim = drill ? 'subgenre' : dim;
+  const subToTop = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const g of genres.values()) m.set(g.sub, g.top);
+    return m;
+  }, [genres]);
+  const drillTop = drill ? (focus.by === 'genre' ? focus.key : subToTop.get(focus.key)) : undefined;
+
   const filtered = useMemo(() => applyFilters(plays, filters, genres), [plays, filters, genres]);
   const summary = useMemo(() => summarize(filtered, filters.from, filters.to), [filtered, filters.from, filters.to]);
 
   // The ranking panels ignore a focus on their own dimension, so the other rows stay clickable.
-  const rankPlays = useMemo(
-    () => (filters.focus?.by === dim ? applyFilters(plays, { ...filters, focus: null }, genres) : filtered),
-    [filters, dim, plays, genres, filtered],
-  );
+  // When drilled into a sub-genre, its siblings in the same top-level genre stay listed.
+  const rankPlays = useMemo(() => {
+    if (focus?.by === 'subgenre' && isGenreDim(viewDim)) {
+      const top = subToTop.get(focus.key);
+      return applyFilters(plays, { ...filters, focus: top ? { by: 'genre', key: top, label: top } : null }, genres);
+    }
+    return focus?.by === viewDim ? applyFilters(plays, { ...filters, focus: null }, genres) : filtered;
+  }, [filters, focus, viewDim, plays, genres, filtered, subToTop]);
   const yearPlays = useMemo(() => {
     const f = filters.focus;
     return f ? kindPlays.filter((p) => itemKey(p, f.by, genres) === f.key) : kindPlays;
   }, [kindPlays, filters.focus, genres]);
 
   const genreNote = useMemo(() => {
-    if (dim !== 'genre') return undefined;
+    if (!isGenreDim(viewDim)) return undefined;
     const known = rankPlays.reduce((n, p) => n + (genres.has(p.artist) ? 1 : 0), 0);
     const pct = rankPlays.length ? Math.round((known / rankPlays.length) * 100) : 0;
     const { done, total } = genreProgress;
     if (total < 0) return 'Loading genres…';
     return done < total
       ? `Looking up genres on Deezer… ${done} of ${total} artists. Covers ${pct}% of plays so far.`
-      : `Genres come from Deezer, by artist. Known for ${pct}% of plays in this range; the rest are left out.`;
-  }, [dim, rankPlays, genres, genreProgress]);
+      : `Each artist's genre was classified by Claude. Known for ${pct}% of plays in this range; the rest are left out.${
+          viewDim === 'genre' ? ' Click a genre to see its sub-genres.' : ''
+        }`;
+  }, [viewDim, rankPlays, genres, genreProgress]);
 
   const isMusic = filters.kind === 'music';
-  const noun = DIM_LABELS[dim][filters.kind].toLowerCase();
+  const noun = DIM_LABELS[viewDim][filters.kind].toLowerCase();
+  const nounIn = drillTop ? `${noun} in ${drillTop}` : noun;
 
   return (
     <div className="app">
@@ -144,31 +163,31 @@ export default function Dashboard({ data, onReset }: Props) {
           from={filters.from}
           to={filters.to}
           metric={metric}
-          by={dim}
-          noun={noun}
+          by={viewDim}
+          noun={nounIn}
           genres={genres}
           note={genreNote}
           unit={unit}
         />
         <TopList
-          title={`Top ${noun}`}
+          title={`Top ${nounIn}`}
           plays={rankPlays}
-          by={dim}
+          by={viewDim}
           metric={metric}
           genres={genres}
           focus={filters.focus}
           onPick={(focus) => setFilters({ ...filters, focus })}
           showThumbs={isMusic}
-          note={dim === 'genre' ? genreNote : undefined}
+          note={genreNote}
         />
         <Heatmap plays={filtered} metric={metric} />
         <DailyChart plays={filtered} from={filters.from} to={filters.to} metric={metric} />
         <DiscoveryChart
-          allPlays={filters.focus && filters.focus.by !== dim ? yearPlays : kindPlays}
+          allPlays={filters.focus && filters.focus.by !== viewDim ? yearPlays : kindPlays}
           from={filters.from}
           to={filters.to}
-          by={dim}
-          noun={noun}
+          by={viewDim}
+          noun={nounIn}
           genres={genres}
           unit={unit}
         />
@@ -186,7 +205,7 @@ export default function Dashboard({ data, onReset }: Props) {
 
       <footer className="foot muted">
         Your listening data never leaves this browser tab. Times are shown in your current time zone.
-        {isMusic && ' Artist pictures, album covers and genres come from Deezer: only the names are sent to look them up.'}
+        {isMusic && ' Artist pictures and album covers come from Deezer: only the names are sent to look them up. Genres were classified by Claude.'}
       </footer>
     </div>
   );

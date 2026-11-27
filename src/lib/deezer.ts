@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { albumSearchUrl, norm, pickGenre, type DzAlbum } from './genre-core';
+import { albumSearchUrl, norm, parseGenre, pickGenre, type DzAlbum, type Genre } from './genre-core';
 
 export { norm };
 
@@ -138,8 +138,9 @@ export function getImage(kind: Kind, artist: string, album = ''): Promise<string
 let shared: Promise<void> | null = null;
 
 /**
- * Load the artist -> genre file published with the site (public/genres.json, kept up to date by the
- * "Update genres" GitHub Action) into the cache, so those artists never need a live lookup.
+ * Load the artist -> genre file published with the site (public/genres.json: Claude's two-level
+ * classification, plus Deezer genres for artists added later by the "Update genres" GitHub Action).
+ * The file wins over anything this browser looked up on Deezer before.
  */
 export function loadSharedGenres(): Promise<void> {
   shared ??= fetch('./genres.json')
@@ -147,7 +148,7 @@ export function loadSharedGenres(): Promise<void> {
     .then((file: { genres?: Record<string, string | null> }) => {
       for (const [artist, genre] of Object.entries(file.genres ?? {})) {
         const key = `genre|${artist}|`;
-        if (!(key in stored) || stored[key] === null) stored[key] = genre;
+        if (genre !== null || !(key in stored)) stored[key] = genre;
       }
     })
     .catch(() => undefined);
@@ -162,10 +163,10 @@ export function loadSharedGenres(): Promise<void> {
 export function loadGenres(
   artists: string[],
   liveLimit: number,
-  onUpdate: (genres: Map<string, string>, done: number, total: number) => void,
+  onUpdate: (genres: Map<string, Genre>, done: number, total: number) => void,
 ): () => void {
   let cancelled = false;
-  const genres = new Map<string, string>();
+  const genres = new Map<string, Genre>();
   let done = 0;
   let total = 0;
   let pending = false;
@@ -184,7 +185,7 @@ export function loadGenres(
       const key = `genre|${a}|`;
       if (key in stored) {
         const g = stored[key];
-        if (g) genres.set(a, g);
+        if (g) genres.set(a, parseGenre(g));
       } else if (missing.length < liveLimit) missing.push(a);
     }
     total = missing.length;
@@ -193,7 +194,7 @@ export function loadGenres(
       getImage('genre', a).then((g) => {
         if (cancelled) return;
         done++;
-        if (g) genres.set(a, g);
+        if (g) genres.set(a, parseGenre(g));
         flush();
       });
     }

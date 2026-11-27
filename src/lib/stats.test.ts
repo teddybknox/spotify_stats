@@ -32,7 +32,7 @@ describe('applyFilters', () => {
     expect(applyFilters(plays, { ...base, minSeconds: 0 })).toHaveLength(6);
     expect(applyFilters(plays, { ...base, focus: { by: 'artist', key: 'B', label: 'B' } })).toHaveLength(3);
     expect(applyFilters(plays, { ...base, kind: 'podcast' })).toHaveLength(1);
-    const genres = new Map([['A', 'Rock'], ['B', 'Jazz']]);
+    const genres = new Map([['A', { top: 'Rock', sub: 'Rock x' }], ['B', { top: 'Jazz', sub: 'Jazz x' }]]);
     expect(applyFilters(plays, { ...base, focus: { by: 'genre', key: 'Jazz', label: 'Jazz' } }, genres)).toHaveLength(3);
     expect(applyFilters(plays, { ...base, focus: { by: 'album', key: albumKey('B', 'B LP'), label: 'B LP' } })).toHaveLength(3);
   });
@@ -52,12 +52,18 @@ describe('topBy', () => {
 
 describe('topBy genre', () => {
   it('groups by artist genre and skips artists without one', () => {
-    const genres = new Map([['A', 'Rock'], ['B', 'Rock'], ['Old Band', 'Jazz']]);
+    const genres = new Map([['A', { top: 'Rock', sub: 'Rock x' }], ['B', { top: 'Rock', sub: 'Rock x' }], ['Old Band', { top: 'Jazz', sub: 'Jazz x' }]]);
     const r = topBy(plays, 'genre', 'plays', 5, genres);
     expect(r.map((x) => [x.label, x.plays])).toEqual([
       ['Rock', 5],
       ['Jazz', 1],
     ]);
+  });
+  it('groups by sub-genre and shows the top-level genre under each', () => {
+    const genres = new Map([['A', { top: 'Rock', sub: 'Glam Rock' }], ['B', { top: 'Rock', sub: 'Math Rock' }]]);
+    const r = topBy(plays, 'subgenre', 'plays', 5, genres);
+    expect(r.every((x) => x.sub === 'Rock')).toBe(true);
+    expect(r.map((x) => x.label).sort()).toEqual(['Glam Rock', 'Math Rock']);
   });
 });
 
@@ -103,7 +109,7 @@ describe('discovery', () => {
       { period: '2022', fresh: 1, returning: 0 },
       { period: '2023', fresh: 3, returning: 0 },
     ]);
-    const genres = new Map([['Old Band', 'Rock'], ['A', 'Rock'], ['B', 'Jazz']]);
+    const genres = new Map([['Old Band', { top: 'Rock', sub: 'Rock x' }], ['A', { top: 'Rock', sub: 'Rock x' }], ['B', { top: 'Jazz', sub: 'Jazz x' }]]);
     expect(discovery(plays.filter((p) => p.kind === 'music'), '2022-01-01', '2023-12-31', 'genre', genres)).toEqual([
       { period: '2022', fresh: 1, returning: 0 },
       { period: '2023', fresh: 1, returning: 1 },
