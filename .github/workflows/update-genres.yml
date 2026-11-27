@@ -40,7 +40,12 @@ jobs:
           git add public/genres.json data/genre-queue.txt
           if git diff --cached --quiet; then echo "Nothing new"; exit 0; fi
           git commit -m "Update artist genres from Deezer"
-          git push origin HEAD:${{ github.ref_name }}
+          # Other commits may land on the branch while this runs; rebase onto them before pushing.
+          for i in 1 2 3 4; do
+            git pull --rebase origin ${{ github.ref_name }} && git push origin HEAD:${{ github.ref_name }} && exit 0
+            sleep $((i * 5))
+          done
+          exit 1
       - name: Continue if artists are still queued
         env:
           GH_TOKEN: ${{ github.token }}
