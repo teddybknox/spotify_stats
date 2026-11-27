@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { enrich } from './parse';
-import { albumKey, applyFilters, topPerPeriod, discovery, topOverTime, dailyTotals, daysBetween, monthsBetween, topBy, weekHourGrid } from './stats';
+import { albumKey, applyFilters, topPerPeriod, discovery, topOverTime, dailyTotals, daysBetween, monthsBetween, topBy, weekHourGrid, buildSearchIndex, searchIndex } from './stats';
 import type { Kind } from './types';
 
 const H = 3_600_000;
@@ -120,5 +120,26 @@ describe('topPerPeriod', () => {
       ['2022', 'Old Band'],
       ['2023', 'A'],
     ]);
+  });
+});
+
+describe('search', () => {
+  const mk = (artist: string, track: string, album: string, n: number) =>
+    Array.from({ length: n }, () => ({ ...play('2024-01-01T00:00:00Z', artist, track), album }));
+  const all = [...mk('Beyoncé', 'Halo', 'I Am... Sasha Fierce', 3), ...mk('Halsey', 'Without Me', 'Manic', 5)];
+  const index = buildSearchIndex(all, ['artist', 'track', 'album']);
+
+  it('ignores accents and case', () => {
+    expect(searchIndex(index, 'beyonce')[0]).toMatchObject({ by: 'artist', label: 'Beyoncé' });
+  });
+  it('puts exact and prefix matches before more-played partial matches', () => {
+    const r = searchIndex(index, 'halo');
+    expect(r[0]).toMatchObject({ by: 'track', label: 'Halo' });
+  });
+  it('matches a track by its artist too', () => {
+    expect(searchIndex(index, 'without halsey').map((r) => r.label)).toEqual(['Without Me']);
+  });
+  it('only returns items that are in the data', () => {
+    expect(searchIndex(index, 'taylor')).toEqual([]);
   });
 });
