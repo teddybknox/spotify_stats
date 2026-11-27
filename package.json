@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
+    "dev": "tsx scripts/build-releases.ts && vite",
+    "build": "tsx scripts/build-releases.ts && tsc -b && vite build",
     "preview": "vite preview",
     "test": "TZ=UTC vitest run"
   },

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cleanTitle, decadeOf, lookupYear, pickDzAlbum, pickMbYear, type MbReleaseGroup } from './release-core';
+import { cleanTitle, decadeOf, lookupYear, pickDzAlbums, pickMbYear, type MbReleaseGroup } from './release-core';
 
 const rg = (title: string, date: string, artist: string, type = 'Album'): MbReleaseGroup => ({
   title,
@@ -30,6 +30,21 @@ describe('release years', () => {
     expect(pickMbYear(groups, 'Billy Joel', 'The Stranger (30th Anniversary Legacy Edition)')).toBe(1977);
     expect(pickMbYear(groups, 'Billy Joel', 'Glass Houses')).toBeNull();
   });
+  it('prefers the studio album over a same-titled compilation or single', () => {
+    const groups = [
+      { ...rg('The Beatles', '1967', 'The Beatles'), 'secondary-types': ['Compilation'] },
+      rg('The Beatles', '1968-11-22', 'The Beatles'),
+    ];
+    expect(pickMbYear(groups, 'The Beatles', 'The Beatles')).toBe(1968);
+  });
+  it('matches a band name that adds or drops "Trio"', () => {
+    const groups = [
+      { ...rg('A Charlie Brown Christmas', '1965-12', 'Vince Guaraldi'), 'secondary-types': ['Soundtrack'] },
+      { ...rg('A Charlie Brown Christmas', '2012', 'Vince Guaraldi Trio'), 'secondary-types': ['Soundtrack'] },
+    ];
+    expect(pickMbYear(groups, 'Vince Guaraldi Trio', 'A Charlie Brown Christmas [2012 Remastered & Expanded Edition]')).toBe(1965);
+    expect(pickMbYear([rg('X', '1990', 'Ann')], 'Joanne', 'X')).toBeNull();
+  });
   it('accepts joint credits', () => {
     const g: MbReleaseGroup = {
       title: 'Watch the Throne',
@@ -46,7 +61,7 @@ describe('release years', () => {
       { id: 1, title: 'Malibu', artist: { name: 'Someone' } },
       { id: 2, title: 'Malibu', artist: { name: 'Anderson .Paak' } },
     ];
-    expect(pickDzAlbum(hits, 'Anderson .Paak', 'Malibu')?.id).toBe(2);
+    expect(pickDzAlbums(hits, 'Anderson .Paak', 'Malibu').map((h) => h.id)).toEqual([2]);
   });
   it('falls back to Deezer when MusicBrainz has nothing', async () => {
     const get = async (url: string) => {

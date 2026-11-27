@@ -47,6 +47,7 @@ export interface MbReleaseGroup {
   score?: number;
   'first-release-date'?: string;
   'primary-type'?: string;
+  'secondary-types'?: string[];
   'artist-credit'?: { name: string; joinphrase?: string; artist?: { name: string } }[];
 }
 
@@ -60,15 +61,27 @@ function creditMatches(rg: MbReleaseGroup, artist: string): boolean {
   const want = norm(artist);
   const credits = rg['artist-credit'] ?? [];
   const full = norm(credits.map((c) => c.name + (c.joinphrase ?? '')).join(''));
-  return full === want || full.includes(want) || credits.some((c) => norm(c.name) === want || norm(c.artist?.name ?? '') === want);
+  if (!want || !full) return false;
+  // "Vince Guaraldi" on MusicBrainz vs "Vince Guaraldi Trio" on Spotify, or joint credits like "JAY-Z & Kanye West".
+  const inside = (a: string, b: string) => ` ${b} `.includes(` ${a} `);
+  return inside(want, full) || inside(full, want) || credits.some((c) => norm(c.name) === want || norm(c.artist?.name ?? '') === want);
 }
+
+/** Proper albums and EPs before singles, compilations, live albums and soundtracks that share the title. */
+const rank = (g: MbReleaseGroup) => {
+  const type = g['primary-type'] ?? '';
+  const studio = (type === 'Album' || type === 'EP') && !(g['secondary-types'] ?? []).length;
+  return studio ? 0 : type === 'Album' || type === 'EP' ? 1 : 2;
+};
 
 /** Earliest first-release year among this artist's release groups with this title. */
 export function pickMbYear(groups: MbReleaseGroup[], artist: string, album: string): number | null {
   const byArtist = groups.filter((g) => creditMatches(g, artist) && yearOf(g['first-release-date']) !== null);
   for (const loose of [false, true]) {
-    const years = byArtist.filter((g) => titlesMatch(album, g.title, loose)).map((g) => yearOf(g['first-release-date'])!);
-    if (years.length) return Math.min(...years);
+    const hits = byArtist.filter((g) => titlesMatch(album, g.title, loose));
+    if (!hits.length) continue;
+    const best = Math.min(...hits.map(rank));
+    return Math.min(...hits.filter((g) => rank(g) === best).map((g) => yearOf(g['first-release-date'])!));
   }
   return null;
 }
@@ -85,35 +98,49 @@ export const dzSearchUrl = (artist: string, album: string) =>
   `https://api.deezer.com/search/album?q=${encodeURIComponent(`${artist} ${cleanTitle(album) || album}`)}&limit=25`;
 export const dzAlbumUrl = (id: number) => `https://api.deezer.com/album/${id}?`;
 
-export function pickDzAlbum(hits: DzAlbumHit[], artist: string, album: string): DzAlbumHit | null {
+/** This artist's Deezer albums with this title (exact title matches, else close ones), up to `n`. */
+export function pickDzAlbums(hits: DzAlbumHit[], artist: string, album: string, n = 3): DzAlbumHit[] {
   const mine = hits.filter((h) => h.artist && norm(h.artist.name) === norm(artist));
-  return mine.find((h) => titlesMatch(album, h.title, false)) ?? mine.find((h) => titlesMatch(album, h.title, true)) ?? null;
+  const exact = mine.filter((h) => titlesMatch(album, h.title, false));
+  return (exact.length ? exact : mine.filter((h) => titlesMatch(album, h.title, true))).slice(0, n);
 }
 
 class ServiceError extends Error {}
+export type Source = 'musicbrainz' | 'deezer';
 
-/**
- * The year an album first came out, or null when neither service knows it.
- * Throws on network trouble or rate limiting, so the caller can retry later instead of storing "unknown".
- */
-export async function lookupYear(
-  artist: string,
-  album: string,
-  getJson: GetJson,
-): Promise<{ year: number | null; source: 'musicbrainz' | 'deezer' | null }> {
+/** MusicBrainz: the year the album's release group first came out. Throws on network trouble or rate limiting. */
+export async function lookupMb(artist: string, album: string, getJson: GetJson): Promise<number | null> {
   const mb = (await getJson(mbSearchUrl(artist, album))) as { 'release-groups'?: MbReleaseGroup[]; error?: string };
   if (mb.error) throw new ServiceError(`MusicBrainz: ${mb.error}`);
-  const year = pickMbYear(mb['release-groups'] ?? [], artist, album);
-  if (year !== null) return { year, source: 'musicbrainz' };
+  return pickMbYear(mb['release-groups'] ?? [], artist, album);
+}
 
+/**
+ * Deezer: the earliest release date among this artist's editions of the album on Deezer. Deezer often
+ * only has a remaster, so this can be later than the original; MusicBrainz years take priority.
+ */
+export async function lookupDz(artist: string, album: string, getJson: GetJson): Promise<number | null> {
   const search = (await getJson(dzSearchUrl(artist, album))) as { data?: DzAlbumHit[]; error?: { code?: number } };
   if (search.error) throw new ServiceError(`Deezer error ${search.error.code}`);
-  const hit = pickDzAlbum(search.data ?? [], artist, album);
-  if (!hit) return { year: null, source: null };
-  const full = (await getJson(dzAlbumUrl(hit.id))) as { release_date?: string; error?: { code?: number } };
-  if (full.error) throw new ServiceError(`Deezer error ${full.error.code}`);
-  const y = yearOf(full.release_date);
-  return { year: y, source: y === null ? null : 'deezer' };
+  let best: number | null = null;
+  for (const hit of pickDzAlbums(search.data ?? [], artist, album)) {
+    const full = (await getJson(dzAlbumUrl(hit.id))) as { release_date?: string; error?: { code?: number } };
+    if (full.error) throw new ServiceError(`Deezer error ${full.error.code}`);
+    const y = yearOf(full.release_date);
+    if (y !== null && (best === null || y < best)) best = y;
+  }
+  return best;
+}
+
+/**
+ * The year an album first came out (MusicBrainz, else Deezer), or null when neither knows it.
+ * Throws on network trouble or rate limiting, so the caller can retry later instead of storing "unknown".
+ */
+export async function lookupYear(artist: string, album: string, getJson: GetJson): Promise<{ year: number | null; source: Source | null }> {
+  const mb = await lookupMb(artist, album, getJson);
+  if (mb !== null) return { year: mb, source: 'musicbrainz' };
+  const dz = await lookupDz(artist, album, getJson);
+  return { year: dz, source: dz === null ? null : 'deezer' };
 }
 
 /** The shared file: artist -> album -> year (null = looked up, not found). */

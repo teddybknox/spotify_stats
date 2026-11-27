@@ -1,14 +1,13 @@
 /**
  * Adds every album in one or more Spotify extended-history exports (zips, folders or JSON files) to
- * data/release-queue.txt, most-listened first, skipping albums already in public/releases.json.
+ * data/release-queue.txt, most-listened first, skipping albums already looked up (data/releases).
  * Only artist and album names are written. Usage: npx tsx scripts/queue-releases.ts my_spotify_data.zip
  */
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { unzipSync, strFromU8 } from 'fflate';
-import type { ReleaseFile } from '../src/lib/release-core';
+import { readParts } from './release-parts';
 
-const RELEASES_FILE = 'public/releases.json';
 const QUEUE_FILE = 'data/release-queue.txt';
 
 interface Rec {
@@ -28,7 +27,7 @@ function* jsonTexts(path: string): Generator<string> {
   }
 }
 
-const file: ReleaseFile = existsSync(RELEASES_FILE) ? JSON.parse(readFileSync(RELEASES_FILE, 'utf8')) : { about: '', years: {} };
+const known = readParts();
 const ms = new Map<string, number>();
 for (const path of process.argv.slice(2)) {
   for (const text of jsonTexts(path)) {
@@ -47,7 +46,7 @@ const fresh = [...ms.entries()]
   .map(([line]) => line)
   .filter((line) => {
     const [artist, album] = line.split('\t');
-    return !(file.years[artist] && album in file.years[artist]);
+    return !(known[artist] && album in known[artist]);
   });
 const all = [...new Set([...queued, ...fresh])];
 writeFileSync(QUEUE_FILE, all.length ? all.join('\n') + '\n' : '');

@@ -1,23 +1,31 @@
 name: Update release years
 
-# Looks up the year each album in data/release-queue.txt first came out (MusicBrainz, else Deezer) and
-# commits the results to public/releases.json every 20 minutes until the queue is empty.
+# Looks up the year each album in data/release-queue.txt first came out (MusicBrainz, else Deezer).
+# One job per service, each at that service's own rate limit, committing data/releases/<service>.json
+# every 15 minutes until done. The site prefers MusicBrainz years (original releases) over Deezer's.
 on:
   workflow_dispatch:
   push:
-    paths: [data/release-queue.txt]
+    paths: [data/release-queue.txt, .github/workflows/update-releases.yml]
 
 permissions:
   contents: write
 
 concurrency:
   group: update-releases-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   update:
     runs-on: ubuntu-latest
     timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        source: [deezer, musicbrainz]
+    env:
+      SOURCE: ${{ matrix.source }}
+      RELEASE_BUDGET_MINUTES: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -26,25 +34,25 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Look up release years, committing as it goes
-        env:
-          RELEASE_BUDGET_MINUTES: 20
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898341+github-actions[bot]@users.noreply.github.com"
           start=$(date +%s)
           while :; do
-            before=$(wc -l < data/release-queue.txt)
-            npx tsx scripts/update-releases.ts
-            git add public/releases.json data/release-queue.txt
+            : > "$RUNNER_TEMP/out"
+            GITHUB_OUTPUT="$RUNNER_TEMP/out" npx tsx scripts/update-releases.ts
+            left=$(sed -n 's/^left=//p' "$RUNNER_TEMP/out")
+            progress=$(sed -n 's/^progress=//p' "$RUNNER_TEMP/out")
+            git add data/releases
             if ! git diff --cached --quiet; then
-              git commit -q -m "Update album release years"
-              # Other commits may land on the branch while this runs; rebase onto them before pushing.
-              for i in 1 2 3 4; do
+              git commit -q -m "Update album release years ($SOURCE)"
+              # The other job pushes its own file meanwhile; each only touches its own.
+              for i in 1 2 3 4 5 6; do
                 git pull -q --rebase origin ${{ github.ref_name }} && git push -q origin HEAD:${{ github.ref_name }} && break
-                sleep $((i * 5))
+                sleep $((i * 7))
               done
             fi
-            if [ ! -s data/release-queue.txt ]; then echo "Queue empty"; break; fi
-            if [ "$(wc -l < data/release-queue.txt)" -ge "$before" ]; then echo "No progress this round; stopping"; exit 1; fi
-            if [ $(( $(date +%s) - start )) -gt $(( 310 * 60 )) ]; then echo "Out of time; push to data/release-queue.txt or run again to continue"; break; fi
+            if [ "${left:-1}" = "0" ]; then echo "Shard done"; break; fi
+            if [ "${progress:-0}" = "0" ]; then echo "No progress this round; stopping"; exit 1; fi
+            if [ $(( $(date +%s) - start )) -gt $(( 330 * 60 )) ]; then echo "Out of time; run the workflow again to continue"; break; fi
           done
