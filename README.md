@@ -3,6 +3,8 @@
 A small web app that turns the `my_spotify_data.zip` Spotify sends you into charts of your listening history.
 
 Everything runs in the browser: the zip is unpacked and analysed on your own machine and is never uploaded anywhere.
+A copy is kept in the browser (IndexedDB) so the landing page can reopen it without choosing the file again; each
+saved file has a Remove button.
 
 ## What it shows
 

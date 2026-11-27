@@ -1,12 +1,20 @@
 import { useRef, useState } from 'react';
+import type { SavedMeta } from '../lib/saved';
+import { fmtDay, fmtInt } from '../lib/format';
 
 interface Props {
   onFiles: (files: File[]) => void;
   loading: boolean;
   error: string | null;
+  saved: SavedMeta[];
+  onOpenSaved: (id: string) => void;
+  onForget: (id: string) => void;
 }
 
-export default function Upload({ onFiles, loading, error }: Props) {
+const fmtSize = (b: number) => (b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`);
+const fmtSaved = (t: number) => new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+
+export default function Upload({ onFiles, loading, error, saved, onOpenSaved, onForget }: Props) {
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
 
@@ -64,6 +72,27 @@ export default function Upload({ onFiles, loading, error }: Props) {
           }}
         />
       </div>
+      {saved.length > 0 && !loading && (
+        <section className="saved" aria-label="Saved in this browser">
+          <h2>Open a file saved in this browser</h2>
+          <ul>
+            {saved.map((s) => (
+              <li key={s.id}>
+                <button className="saved-open" onClick={() => onOpenSaved(s.id)}>
+                  <strong>{s.name}</strong>
+                  <span className="muted">
+                    {fmtInt(s.plays)} plays, {fmtDay(s.from)} to {fmtDay(s.to)} · {fmtSize(s.bytes)} · saved{' '}
+                    {fmtSaved(s.savedAt)}
+                  </span>
+                </button>
+                <button className="ghost" onClick={() => onForget(s.id)} aria-label={`Remove ${s.name} from this browser`}>
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       {error && (
         <p className="error" role="alert">
           {error}
@@ -74,8 +103,8 @@ export default function Upload({ onFiles, loading, error }: Props) {
         <div>
           <h2>Private by design</h2>
           <p>
-            Your file is opened right here in your browser. Nothing is uploaded to a server, and nothing is saved
-            once you close the tab.
+            Your file is opened right here in your browser and never uploaded to a server. A copy is kept in this
+            browser so you can reopen it later, and you can remove it any time.
           </p>
         </div>
         <div>

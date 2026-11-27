@@ -208,3 +208,15 @@ code { font-size: 0.9em; background: var(--accent-soft); padding: 1px 5px; borde
 .pt-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pt-sub { color: var(--text-2); font-size: 0.78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pt-empty { color: var(--text-2); padding-left: 12px; }
+
+/* Saved uploads on the landing page */
+.saved { margin-top: 24px; }
+.saved h2 { font-size: 1rem; margin: 0 0 8px; }
+.saved ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.saved li { display: flex; align-items: center; gap: 8px; }
+.saved-open {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px;
+}
+.saved-open:hover, .saved-open:focus-visible { border-color: var(--accent); background: var(--accent-soft); outline: none; }
+.saved-open strong { overflow-wrap: anywhere; }
