@@ -3,11 +3,17 @@ name: Update genres
 # Looks up Deezer genres for the artists in data/genre-queue.txt and commits them to public/genres.json.
 on:
   workflow_dispatch:
+    inputs:
+      top_artists:
+        description: Also queue this many of the most-listened artists on Spotify (from kworb.net), e.g. 10000
+        required: false
+        default: '0'
   push:
     paths: [data/genre-queue.txt]
 
 permissions:
   contents: write
+  actions: write # lets a run start the next one while artists are still queued
 
 concurrency:
   group: update-genres-${{ github.ref }}
@@ -24,6 +30,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - if: ${{ inputs.top_artists && inputs.top_artists != '0' }}
+        run: npx tsx scripts/queue-top-artists.ts ${{ inputs.top_artists }}
       - run: npx tsx scripts/update-genres.ts
       - name: Commit results
         run: |
@@ -32,4 +40,17 @@ jobs:
           git add public/genres.json data/genre-queue.txt
           if git diff --cached --quiet; then echo "Nothing new"; exit 0; fi
           git commit -m "Update artist genres from Deezer"
-          git push origin HEAD:${{ github.ref_name }}
+          # Other commits may land on the branch while this runs; rebase onto them before pushing.
+          for i in 1 2 3 4; do
+            git pull --rebase origin ${{ github.ref_name }} && git push origin HEAD:${{ github.ref_name }} && exit 0
+            sleep $((i * 5))
+          done
+          exit 1
+      - name: Continue if artists are still queued
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -s data/genre-queue.txt ]; then
+            echo "$(wc -l < data/genre-queue.txt) artists left; starting another run"
+            gh workflow run update-genres.yml --ref ${{ github.ref_name }}
+          fi

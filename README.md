@@ -3,6 +3,8 @@
 A small web app that turns the `my_spotify_data.zip` Spotify sends you into charts of your listening history.
 
 Everything runs in the browser: the zip is unpacked and analysed on your own machine and is never uploaded anywhere.
+A copy is kept in the browser (IndexedDB) so the landing page can reopen it without choosing the file again; each
+saved file has a Remove button.
 
 ## What it shows
 
@@ -12,7 +14,8 @@ Two switches at the top drive the whole page:
 - **Rank**: artists, tracks, albums or genres. This switches the two main panels: a monthly "top over time" chart
   (top 3 / 5 / 8 plus "Other", as totals or share) and a ranked top 10 / 25 / 50 list.
 
-Click any row in the ranked list to focus every chart on that artist, track, album or genre.
+Click any row in the ranked list, or use the search box at the top (it suggests only things in your own history), to
+focus every chart on that artist, track, album or genre.
 
 Also on the page: headline numbers, a weekday × hour heatmap in your local time zone, plays or hours per day with a
 1 / 7 / 30 / 90-day moving average, totals per year (click a bar to zoom into that year), and new artists discovered

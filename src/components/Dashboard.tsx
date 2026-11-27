@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import FilterBar, { DIM_LABELS } from './FilterBar';
+import SearchBox from './SearchBox';
 import StatTiles from './StatTiles';
 import TopList from './TopList';
 import DailyChart from './DailyChart';
@@ -8,7 +9,7 @@ import Heatmap from './Heatmap';
 import YearChart from './YearChart';
 import DiscoveryChart from './DiscoveryChart';
 import PeriodTable from './PeriodTable';
-import { applyFilters, itemKey, summarize, topBy, type Dim, type Filters, type GenreMap, type Metric } from '../lib/stats';
+import { applyFilters, buildSearchIndex, itemKey, summarize, topBy, type Dim, type Filters, type GenreMap, type Metric } from '../lib/stats';
 import { loadGenres } from '../lib/deezer';
 import { fmtDay } from '../lib/format';
 import type { ParseResult } from '../lib/types';
@@ -45,7 +46,8 @@ export default function Dashboard({ data, onReset }: Props) {
   );
 
   // Genres are looked up only once someone asks for them.
-  const wantGenres = filters.kind === 'music' && (dim === 'genre' || filters.focus?.by === 'genre');
+  const [searching, setSearching] = useState(false);
+  const wantGenres = filters.kind === 'music' && (dim === 'genre' || filters.focus?.by === 'genre' || searching);
   const genreArtists = useMemo(
     () => (wantGenres ? topBy(kindPlays, 'artist', 'plays', Infinity).map((r) => r.artist) : []),
     [wantGenres, kindPlays],
@@ -59,6 +61,13 @@ export default function Dashboard({ data, onReset }: Props) {
       setGenreProgress({ done, total });
     });
   }, [genreArtists]);
+
+  // Search covers everything in this export (all dates), not just the selected range.
+  const searchIdx = useMemo(() => {
+    if (!searching) return [];
+    const dims = (Object.keys(DIM_LABELS) as Dim[]).filter((d) => DIM_LABELS[d][filters.kind]);
+    return buildSearchIndex(kindPlays, dims, genres);
+  }, [searching, kindPlays, filters.kind, genres]);
 
   const filtered = useMemo(() => applyFilters(plays, filters, genres), [plays, filters, genres]);
   const summary = useMemo(() => summarize(filtered, filters.from, filters.to), [filtered, filters.from, filters.to]);
@@ -114,6 +123,15 @@ export default function Dashboard({ data, onReset }: Props) {
         setMeasure={setMetric}
         dim={dim}
         setDim={setDim}
+        search={
+          <SearchBox
+            index={searchIdx}
+            kind={filters.kind}
+            onPick={(focus) => setFilters({ ...filters, focus })}
+            onActivate={() => setSearching(true)}
+            genresLoading={wantGenres && genreProgress.total >= 0 && genreProgress.done < genreProgress.total}
+          />
+        }
       />
 
       <StatTiles s={summary} kind={filters.kind} />

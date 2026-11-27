@@ -316,3 +316,43 @@ export function topPerPeriod(plays: Play[], from: string, to: string, unit: Unit
     };
   });
 }
+
+export interface SearchItem extends Ranked {
+  by: Dim;
+  /** Folded label (and artist, for tracks and albums) used for matching. */
+  text: string;
+  /** text plus the folded artist, so "song artist" queries match. */
+  hay: string;
+}
+
+/** Lower case, accents dropped, spaces collapsed; keeps non-Latin scripts intact. */
+export const fold = (s: string) =>
+  s.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
+
+/** Everything that can be searched for: each artist, track, album (and genre, when known) in these plays. */
+export function buildSearchIndex(plays: Play[], dims: Dim[], genres?: GenreMap): SearchItem[] {
+  return dims.flatMap((by) =>
+    topBy(plays, by, 'plays', Infinity, genres).map((r) => ({ ...r, by, text: fold(r.label), hay: fold(r.sub ? `${r.label} ${r.sub}` : r.label) })),
+  );
+}
+
+/**
+ * Best matches for a query: whole-name matches first, then names that start with it, then a word that
+ * starts with it, then anywhere in the name. Ties go to the most played. Every word of the query must appear.
+ */
+export function searchIndex(index: SearchItem[], query: string, n = 8): SearchItem[] {
+  const q = fold(query);
+  if (!q) return [];
+  const words = q.split(' ');
+  const scored: { item: SearchItem; score: number }[] = [];
+  for (const item of index) {
+    const t = item.text;
+    if (!words.every((w) => item.hay.includes(w))) continue;
+    const score = t === q ? 0 : t.startsWith(q) ? 1 : t.includes(' ' + q) ? 2 : t.includes(q) ? 3 : 4;
+    scored.push({ item, score });
+  }
+  return scored
+    .sort((a, b) => a.score - b.score || b.item.plays - a.item.plays)
+    .slice(0, n)
+    .map((s) => s.item);
+}

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { Dim, Filters } from '../lib/stats';
 import type { Kind } from '../lib/types';
 import type { Measure } from '../lib/format';
@@ -14,6 +15,7 @@ interface Props {
   setMeasure: (m: Measure) => void;
   dim: Dim;
   setDim: (d: Dim) => void;
+  search?: ReactNode;
 }
 
 export const DIM_LABELS: Record<Dim, { music: string; podcast: string }> = {
@@ -28,7 +30,7 @@ function shiftYear(day: string, years: number): string {
   return `${Number(y) + years}-${m}-${d}`;
 }
 
-export default function FilterBar({ filters, setFilters, minDay, maxDay, years, hasPodcasts, measure, setMeasure, dim, setDim }: Props) {
+export default function FilterBar({ filters, setFilters, minDay, maxDay, years, hasPodcasts, measure, setMeasure, dim, setDim, search }: Props) {
   const dims = (Object.keys(DIM_LABELS) as Dim[]).filter((d) => DIM_LABELS[d][filters.kind]);
   const set = (patch: Partial<Filters>) => setFilters({ ...filters, ...patch });
   const clamp = (d: string) => (d < minDay ? minDay : d > maxDay ? maxDay : d);
@@ -54,6 +56,7 @@ export default function FilterBar({ filters, setFilters, minDay, maxDay, years, 
         ))}
       </div>
       <div className="filter-row">
+        {search}
         <div className="measure">
           Measure by
           <Segmented
