@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import Card, { Segmented } from './Card';
+import { useMemo } from 'react';
+import Card from './Card';
 import Thumb from './Thumb';
 import { fmtMeasure, fmtMonth } from '../lib/format';
 import { topPerPeriod, type Focus, type Metric, type Ranked, type Unit } from '../lib/stats';
@@ -13,6 +13,7 @@ interface Props {
   showThumbs: boolean;
   onPick: (focus: Focus) => void;
   isMusic: boolean;
+  unit: Unit;
 }
 
 function Cell({
@@ -50,8 +51,7 @@ function Cell({
   );
 }
 
-export default function PeriodTable({ plays, from, to, metric, showThumbs, onPick, isMusic }: Props) {
-  const [unit, setUnit] = useState<Unit>('year');
+export default function PeriodTable({ plays, from, to, metric, showThumbs, onPick, isMusic, unit }: Props) {
   const rows = useMemo(() => topPerPeriod(plays, from, to, unit, metric), [plays, from, to, unit, metric]);
   const label = (period: string) => (unit === 'month' ? fmtMonth(period) : period);
 
@@ -62,17 +62,6 @@ export default function PeriodTable({ plays, from, to, metric, showThumbs, onPic
       subtitle={`Your top ${isMusic ? 'artist, album and track' : 'show and episode'} for every ${unit} in the selected range, by ${
         metric === 'plays' ? 'plays' : 'time'
       }. Click one to focus on it.`}
-      controls={
-        <Segmented
-          label="Period"
-          value={unit}
-          onChange={setUnit}
-          options={[
-            { value: 'year', label: 'Years' },
-            { value: 'month', label: 'Months' },
-          ]}
-        />
-      }
     >
       <div className="pt-wrap">
         <table className="pt">

@@ -43,3 +43,8 @@ export function niceStep(max: number): number {
   const f = raw / pow;
   return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * pow;
 }
+
+/** '2024' stays as is; '2024-03' becomes 'Mar 2024'. */
+export const fmtPeriod = (p: string) => (p.length === 7 ? fmtMonth(p) : p);
+/** Axis label: '2024', or "Mar '24" (January shows the year). */
+export const fmtPeriodShort = (p: string) => (p.length === 7 ? fmtMonthShort(p) : p);

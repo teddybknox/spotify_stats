@@ -188,9 +188,21 @@ export interface Series {
   sub: string;
 }
 
+export type Unit = 'year' | 'month';
+
+/** Every year ('2024') or month ('2024-03') from `from` to `to` (days), inclusive. */
+export function periodsBetween(from: string, to: string, unit: Unit): string[] {
+  if (unit === 'month') return monthsBetween(from.slice(0, 7), to.slice(0, 7));
+  const a = Number(from.slice(0, 4));
+  const b = Number(to.slice(0, 4));
+  return Array.from({ length: Math.max(0, b - a + 1) }, (_, i) => String(a + i));
+}
+
+export const periodOf = (p: Play, unit: Unit) => (unit === 'month' ? p.month : String(p.year));
+
 export interface StackedResult {
   series: Series[]; // top items in rank order, then Other if any
-  rows: Record<string, number | string>[]; // { month, s0: value, s1: value, ..., Other: value }
+  rows: Record<string, number | string>[]; // { period, s0: value, s1: value, ..., Other: value }
 }
 
 /** Monthly totals for the top `n` artists, tracks, albums or genres, everything else folded into "Other". */
@@ -202,19 +214,20 @@ export function topOverTime(
   metric: Metric = 'hours',
   by: Dim = 'artist',
   genres?: GenreMap,
+  unit: Unit = 'month',
 ): StackedResult {
   const top = topBy(plays, by, metric, n, genres);
   const keyOf = new Map(top.map((r, i) => [r.key, `s${i}`]));
-  const months = monthsBetween(from.slice(0, 7), to.slice(0, 7));
-  const index = new Map(months.map((m, i) => [m, i]));
-  const rows: Record<string, number | string>[] = months.map((month) => {
-    const r: Record<string, number | string> = { month, Other: 0 };
+  const periods = periodsBetween(from, to, unit);
+  const index = new Map(periods.map((m, i) => [m, i]));
+  const rows: Record<string, number | string>[] = periods.map((period) => {
+    const r: Record<string, number | string> = { period, Other: 0 };
     for (const k of keyOf.values()) r[k] = 0;
     return r;
   });
   let hasOther = false;
   for (const p of plays) {
-    const i = index.get(p.month);
+    const i = index.get(periodOf(p, unit));
     if (i === undefined) continue;
     const item = itemKey(p, by, genres);
     if (item === null) continue; // no album / unknown genre: left out rather than lumped into Other
@@ -235,28 +248,11 @@ export function weekHourGrid(plays: Play[], metric: Metric = 'hours'): number[][
   return grid;
 }
 
-export interface YearPoint {
-  year: number;
-  hours: number;
-  plays: number;
-}
-
-export function byYear(plays: Play[]): YearPoint[] {
-  const map = new Map<number, YearPoint>();
-  for (const p of plays) {
-    let y = map.get(p.year);
-    if (!y) map.set(p.year, (y = { year: p.year, hours: 0, plays: 0 }));
-    y.hours += p.ms / HOUR_MS;
-    y.plays++;
-  }
-  return [...map.values()].sort((a, b) => a.year - b.year);
-}
-
 export interface DiscoveryPoint {
-  year: number;
-  /** Items heard for the first time ever that year. */
+  period: string;
+  /** Items heard for the first time ever in that year or month. */
   fresh: number;
-  /** Items heard that year that had already been heard in an earlier year. */
+  /** Items heard then that had already been heard before. */
   returning: number;
 }
 
@@ -264,28 +260,30 @@ export interface DiscoveryPoint {
  * For each year in range: how many artists (or tracks, albums, genres) you heard for the first time
  * ever, vs. ones you already knew. `allPlays` must cover all time and be sorted by time.
  */
-export function discovery(allPlays: Play[], from: string, to: string, by: Dim = 'artist', genres?: GenreMap): DiscoveryPoint[] {
-  const firstYear = new Map<string, number>();
-  const perYear = new Map<number, Set<string>>();
+export function discovery(
+  allPlays: Play[],
+  from: string,
+  to: string,
+  by: Dim = 'artist',
+  genres?: GenreMap,
+  unit: Unit = 'year',
+): DiscoveryPoint[] {
+  const first = new Map<string, string>();
+  const per = new Map<string, Set<string>>(periodsBetween(from, to, unit).map((x) => [x, new Set()]));
   for (const p of allPlays) {
     const k = itemKey(p, by, genres);
     if (k === null) continue;
-    if (!firstYear.has(k)) firstYear.set(k, p.year);
+    const period = periodOf(p, unit);
+    if (!first.has(k)) first.set(k, period);
     if (p.day < from || p.day > to) continue;
-    let s = perYear.get(p.year);
-    if (!s) perYear.set(p.year, (s = new Set()));
-    s.add(k);
+    per.get(period)?.add(k);
   }
-  return [...perYear.entries()]
-    .sort((a, b) => a[0] - b[0])
-    .map(([year, set]) => {
-      let n = 0;
-      for (const k of set) if (firstYear.get(k) === year) n++;
-      return { year, fresh: n, returning: set.size - n };
-    });
+  return [...per.entries()].map(([period, set]) => {
+    let n = 0;
+    for (const k of set) if (first.get(k) === period) n++;
+    return { period, fresh: n, returning: set.size - n };
+  });
 }
-
-export type Unit = 'year' | 'month';
 
 export interface PeriodTop {
   period: string; // '2024' or '2024-03'
@@ -298,12 +296,9 @@ export interface PeriodTop {
 
 /** The top artist, album and track of every year or month from `from` to `to` (empty periods included). */
 export function topPerPeriod(plays: Play[], from: string, to: string, unit: Unit, metric: Metric): PeriodTop[] {
-  const periods =
-    unit === 'month'
-      ? monthsBetween(from.slice(0, 7), to.slice(0, 7))
-      : Array.from({ length: Number(to.slice(0, 4)) - Number(from.slice(0, 4)) + 1 }, (_, i) => String(Number(from.slice(0, 4)) + i));
+  const periods = periodsBetween(from, to, unit);
   const groups = new Map<string, Play[]>(periods.map((p) => [p, []]));
-  for (const p of plays) groups.get(unit === 'month' ? p.month : String(p.year))?.push(p);
+  for (const p of plays) groups.get(periodOf(p, unit))?.push(p);
   return periods.map((period) => {
     const ps = groups.get(period)!;
     return {

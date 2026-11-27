@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Area, Bar, CartesianGrid, ComposedChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import Card, { Segmented } from './Card';
 import { TipBox } from './ChartTooltip';
-import { topOverTime, type Dim, type GenreMap, type Metric, type Series } from '../lib/stats';
-import { fmtAxis, fmtMeasure, fmtMonth, fmtMonthShort } from '../lib/format';
+import { topOverTime, type Dim, type GenreMap, type Metric, type Series, type Unit } from '../lib/stats';
+import { fmtAxis, fmtMeasure, fmtPeriod, fmtPeriodShort } from '../lib/format';
 import { usePalette } from '../lib/theme';
 import type { Play } from '../lib/types';
 
@@ -19,19 +19,20 @@ interface Props {
   noun: string;
   genres?: GenreMap;
   note?: string;
+  unit: Unit;
 }
 
-export default function TopOverTime({ plays, from, to, metric, by, noun, genres, note }: Props) {
+export default function TopOverTime({ plays, from, to, metric, by, noun, genres, note, unit }: Props) {
   const pal = usePalette();
   const [n, setN] = useState(5);
   const [mode, setMode] = useState<Mode>('total');
-  const { series, rows } = useMemo(() => topOverTime(plays, from, to, n, metric, by, genres), [plays, from, to, n, metric, by, genres]);
+  const { series, rows } = useMemo(() => topOverTime(plays, from, to, n, metric, by, genres, unit), [plays, from, to, n, metric, by, genres, unit]);
 
   const data = useMemo(() => {
     if (mode === 'total') return rows;
     return rows.map((r) => {
       const total = series.reduce((s, x) => s + (r[x.key] as number), 0);
-      const out: Record<string, number | string> = { month: r.month };
+      const out: Record<string, number | string> = { period: r.period };
       for (const x of series) out[x.key] = total ? ((r[x.key] as number) / total) * 100 : 0;
       return out;
     });
@@ -43,7 +44,7 @@ export default function TopOverTime({ plays, from, to, metric, by, noun, genres,
     <Card
       wide
       title={`Top ${noun} over time`}
-      subtitle={note ?? `Monthly ${metric === 'plays' ? 'plays' : 'hours'} for your top ${noun} in this range. Everything else is grouped as Other.`}
+      subtitle={note ?? `${unit === 'month' ? 'Monthly' : 'Yearly'} ${metric === 'plays' ? 'plays' : 'hours'} for your top ${noun} in this range. Everything else is grouped as Other.`}
       controls={
         <>
           <Segmented
@@ -78,15 +79,15 @@ export default function TopOverTime({ plays, from, to, metric, by, noun, genres,
       </ul>
       <div className="chart" style={{ height: 300 }}>
         <ResponsiveContainer>
-          <AreaChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+          <ComposedChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
             <CartesianGrid stroke={pal.grid} vertical={false} />
             <XAxis
-              dataKey="month"
+              dataKey="period"
               stroke={pal.axis}
               tick={{ fontSize: 12, fill: pal.axis }}
               tickLine={false}
-              minTickGap={30}
-              tickFormatter={fmtMonthShort}
+              minTickGap={unit === 'month' ? 30 : 4}
+              tickFormatter={fmtPeriodShort}
             />
             <YAxis
               stroke={pal.axis}
@@ -98,15 +99,15 @@ export default function TopOverTime({ plays, from, to, metric, by, noun, genres,
               tickFormatter={(v: number) => (mode === 'share' ? `${v}%` : fmtAxis(v, metric))}
             />
             <Tooltip
-              cursor={{ stroke: pal.axis, strokeDasharray: '3 3' }}
+              cursor={unit === 'month' ? { stroke: pal.axis, strokeDasharray: '3 3' } : { fill: pal.grid, opacity: 0.6 }}
               content={({ active, payload, label }) => {
                 if (!active || !payload?.length) return null;
-                const r = rows.find((x) => x.month === label);
+                const r = rows.find((x) => x.period === label);
                 if (!r) return null;
                 const total = series.reduce((s, x) => s + (r[x.key] as number), 0);
                 return (
                   <TipBox
-                    title={fmtMonth(String(label))}
+                    title={fmtPeriod(String(label))}
                     rows={series
                       .map((x, i) => ({ x, i }))
                       .reverse()
@@ -123,21 +124,36 @@ export default function TopOverTime({ plays, from, to, metric, by, noun, genres,
                 );
               }}
             />
-            {series.map((x, i) => (
-              <Area
-                key={x.key}
-                type="linear"
-                dataKey={x.key}
-                name={x.label}
-                stackId="1"
-                stroke={pal.surface}
-                strokeWidth={1}
-                fill={color(x, i)}
-                fillOpacity={1}
-                isAnimationActive={false}
-              />
-            ))}
-          </AreaChart>
+            {series.map((x, i) =>
+              unit === 'month' ? (
+                <Area
+                  key={x.key}
+                  type="linear"
+                  dataKey={x.key}
+                  name={x.label}
+                  stackId="1"
+                  stroke={pal.surface}
+                  strokeWidth={1}
+                  fill={color(x, i)}
+                  fillOpacity={1}
+                  isAnimationActive={false}
+                />
+              ) : (
+                <Bar
+                  key={x.key}
+                  dataKey={x.key}
+                  name={x.label}
+                  stackId="1"
+                  fill={color(x, i)}
+                  stroke={pal.surface}
+                  strokeWidth={1}
+                  maxBarSize={56}
+                  radius={i === series.length - 1 ? [4, 4, 0, 0] : undefined}
+                  isAnimationActive={false}
+                />
+              ),
+            )}
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
     </Card>
