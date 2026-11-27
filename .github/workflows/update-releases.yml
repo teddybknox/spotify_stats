@@ -1,0 +1,50 @@
+name: Update release years
+
+# Looks up the year each album in data/release-queue.txt first came out (MusicBrainz, else Deezer) and
+# commits the results to public/releases.json every 20 minutes until the queue is empty.
+on:
+  workflow_dispatch:
+  push:
+    paths: [data/release-queue.txt]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-releases-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Look up release years, committing as it goes
+        env:
+          RELEASE_BUDGET_MINUTES: 20
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898341+github-actions[bot]@users.noreply.github.com"
+          start=$(date +%s)
+          while :; do
+            before=$(wc -l < data/release-queue.txt)
+            npx tsx scripts/update-releases.ts
+            git add public/releases.json data/release-queue.txt
+            if ! git diff --cached --quiet; then
+              git commit -q -m "Update album release years"
+              # Other commits may land on the branch while this runs; rebase onto them before pushing.
+              for i in 1 2 3 4; do
+                git pull -q --rebase origin ${{ github.ref_name }} && git push -q origin HEAD:${{ github.ref_name }} && break
+                sleep $((i * 5))
+              done
+            fi
+            if [ ! -s data/release-queue.txt ]; then echo "Queue empty"; break; fi
+            if [ "$(wc -l < data/release-queue.txt)" -ge "$before" ]; then echo "No progress this round; stopping"; exit 1; fi
+            if [ $(( $(date +%s) - start )) -gt $(( 310 * 60 )) ]; then echo "Out of time; push to data/release-queue.txt or run again to continue"; break; fi
+          done
