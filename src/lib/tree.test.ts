@@ -77,3 +77,24 @@ describe('tree search', () => {
     expect(searchTree(flattenTree(root), 'beatles', 5)[0].node.name).toBe('The Beatles');
   });
 });
+
+describe('skipping levels', () => {
+  it('joins genre straight to artists when sub-genres are skipped', () => {
+    const root = buildTree(plays, genres, ['genre', 'artist', 'album', 'track']);
+    const rock = root.children.find((c) => c.name === 'Rock')!;
+    expect(sortedChildren(rock, 'plays').map((c) => [c.name, c.level])).toEqual([
+      ['Beatles', 'artist'],
+      ['Radiohead', 'artist'],
+      ['Stones', 'artist'],
+    ]);
+  });
+
+  it('can skip several levels and keeps same-named tracks by different artists apart', () => {
+    const root = buildTree([...plays, play('Stones', 'Covers', 'Yesterday')], genres, ['genre', 'track']);
+    const rock = root.children.find((c) => c.name === 'Rock')!;
+    const yesterdays = rock.children.filter((c) => c.name === 'Yesterday');
+    expect(yesterdays.map((c) => c.by).sort()).toEqual(['Beatles', 'Stones']);
+    expect(yesterdays[0].children).toEqual([]);
+    expect(searchTree(flattenTree(root), 'yesterday', 5)[0].path).toMatch(/^Rock · by /);
+  });
+});
