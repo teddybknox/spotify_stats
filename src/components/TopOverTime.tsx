@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Area, Bar, CartesianGrid, ComposedChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { useEffect, useMemo, useState } from 'react';
+import { Area, Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import Card, { Segmented } from './Card';
 import { TipBox, TipCloseProvider, useTapTip } from './ChartTooltip';
 import { topOverTime, type Dim, type GenreMap, type Metric, type Series, type Unit } from '../lib/stats';
@@ -7,7 +7,10 @@ import { fmtAxis, fmtMeasure, fmtPeriod, fmtPeriodShort } from '../lib/format';
 import { usePalette } from '../lib/theme';
 import type { Play } from '../lib/types';
 
-type Mode = 'total' | 'share';
+type Mode = 'lines' | 'total' | 'share';
+
+/** Genres and decades read best as separate lines; artists, tracks and albums as a stack. */
+const defaultMode = (by: Dim): Mode => (by === 'genre' || by === 'subgenre' || by === 'decade' ? 'lines' : 'total');
 
 interface Props {
   plays: Play[];
@@ -26,11 +29,14 @@ export default function TopOverTime({ plays, from, to, metric, by, noun, genres,
   const pal = usePalette();
   const tip = useTapTip();
   const [n, setN] = useState(5);
-  const [mode, setMode] = useState<Mode>('total');
+  const [mode, setMode] = useState<Mode>(() => defaultMode(by));
+  // Switching what's ranked goes back to that ranking's default view.
+  useEffect(() => setMode(defaultMode(by)), [by]);
+  const lines = mode === 'lines';
   const { series, rows } = useMemo(() => topOverTime(plays, from, to, n, metric, by, genres, unit), [plays, from, to, n, metric, by, genres, unit]);
 
   const data = useMemo(() => {
-    if (mode === 'total') return rows;
+    if (mode !== 'share') return rows;
     return rows.map((r) => {
       const total = series.reduce((s, x) => s + (r[x.key] as number), 0);
       const out: Record<string, number | string> = { period: r.period };
@@ -40,12 +46,14 @@ export default function TopOverTime({ plays, from, to, metric, by, noun, genres,
   }, [rows, series, mode]);
 
   const color = (x: Series, i: number) => (x.key === 'Other' ? pal.other : pal.series[i]);
+  // Line view leaves out "Other", which would dwarf everything else.
+  const shown = useMemo(() => series.map((x, i) => ({ x, i })).filter(({ x }) => !lines || x.key !== 'Other'), [series, lines]);
 
   return (
     <Card
       wide
       title={`Top ${noun} over time`}
-      subtitle={note ?? `${unit === 'month' ? 'Monthly' : 'Yearly'} ${metric === 'plays' ? 'plays' : 'hours'} for your top ${noun} in this range. Everything else is grouped as Other.`}
+      subtitle={note ?? `${unit === 'month' ? 'Monthly' : 'Yearly'} ${metric === 'plays' ? 'plays' : 'hours'} for your top ${noun} in this range. ${lines ? '' : 'Everything else is grouped as Other.'}`}
       controls={
         <>
           <Segmented
@@ -53,7 +61,8 @@ export default function TopOverTime({ plays, from, to, metric, by, noun, genres,
             value={mode}
             onChange={setMode}
             options={[
-              { value: 'total', label: metric === 'plays' ? 'Plays' : 'Hours' },
+              { value: 'lines', label: 'Lines' },
+              { value: 'total', label: 'Stacked' },
               { value: 'share', label: 'Share' },
             ]}
           />
@@ -71,7 +80,7 @@ export default function TopOverTime({ plays, from, to, metric, by, noun, genres,
       }
     >
       <ul className="legend">
-        {series.map((x, i) => (
+        {shown.map(({ x, i }) => (
           <li key={x.key} title={x.sub ? `${x.label} by ${x.sub}` : x.label}>
             <span className="swatch" style={{ background: color(x, i) }} />
             {x.label}
@@ -102,7 +111,7 @@ export default function TopOverTime({ plays, from, to, metric, by, noun, genres,
             />
             <Tooltip
               {...tip.tooltipProps}
-              cursor={unit === 'month' ? { stroke: pal.axis, strokeDasharray: '3 3' } : { fill: pal.grid, opacity: 0.6 }}
+              cursor={unit === 'month' || lines ? { stroke: pal.axis, strokeDasharray: '3 3' } : { fill: pal.grid, opacity: 0.6 }}
               content={({ active, payload, label }) => {
                 if (!active || !payload?.length) return null;
                 const r = rows.find((x) => x.period === label);
@@ -111,9 +120,7 @@ export default function TopOverTime({ plays, from, to, metric, by, noun, genres,
                 return (
                   <TipBox
                     title={fmtPeriod(String(label))}
-                    rows={series
-                      .map((x, i) => ({ x, i }))
-                      .reverse()
+                    rows={(lines ? [...shown].sort((a, b) => (r[b.x.key] as number) - (r[a.x.key] as number)) : [...shown].reverse())
                       .map(({ x, i }) => ({
                         label: x.label,
                         color: color(x, i),
@@ -122,13 +129,25 @@ export default function TopOverTime({ plays, from, to, metric, by, noun, genres,
                             ? `${total ? Math.round(((r[x.key] as number) / total) * 100) : 0}%`
                             : fmtMeasure(r[x.key] as number, metric),
                       }))}
-                    foot={`Total ${fmtMeasure(total, metric)}`}
+                    foot={lines ? undefined : `Total ${fmtMeasure(total, metric)}`}
                   />
                 );
               }}
             />
-            {series.map((x, i) =>
-              unit === 'month' ? (
+            {shown.map(({ x, i }) =>
+              lines ? (
+                <Line
+                  key={x.key}
+                  type="monotone"
+                  dataKey={x.key}
+                  name={x.label}
+                  stroke={color(x, i)}
+                  strokeWidth={2}
+                  dot={unit === 'year' ? { r: 3, fill: color(x, i), strokeWidth: 0 } : false}
+                  activeDot={{ r: 4, stroke: pal.surface, strokeWidth: 2 }}
+                  isAnimationActive={false}
+                />
+              ) : unit === 'month' ? (
                 <Area
                   key={x.key}
                   type="linear"
