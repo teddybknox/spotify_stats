@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import FilterBar, { DIM_LABELS } from './FilterBar';
 import SearchBox from './SearchBox';
 import StatTiles from './StatTiles';
@@ -8,6 +8,7 @@ import TopOverTime from './TopOverTime';
 import Heatmap from './Heatmap';
 import DiscoveryChart from './DiscoveryChart';
 import PeriodTable from './PeriodTable';
+import GenreTree from './GenreTree';
 import { albumKey, applyFilters, buildSearchIndex, isGenreDim, itemKey, summarize, topBy, type Dim, type Filters, type GenreMap, type Metric, type Unit } from '../lib/stats';
 import { loadGenres } from '../lib/deezer';
 import { loadReleaseYears, type YearMap } from '../lib/releases';
@@ -29,6 +30,8 @@ export default function Dashboard({ data, onReset }: Props) {
   const [dim, setDim] = useState<Dim>('artist');
   const [focusBy, setFocusBy] = useState<Dim | null>(null);
   const [searching, setSearching] = useState(false);
+  const [treeSeen, setTreeSeen] = useState(false);
+  const onTreeVisible = useCallback(() => setTreeSeen(true), []);
 
   // Release years are looked up only once someone asks for decades; each play then carries its album's year.
   const wantDecades = dim === 'decade' || focusBy === 'decade' || searching;
@@ -88,7 +91,7 @@ export default function Dashboard({ data, onReset }: Props) {
 
   // Genres are looked up only once someone asks for them.
   const wantGenres =
-    filters.kind === 'music' && (isGenreDim(dim) || (filters.focus !== null && isGenreDim(filters.focus.by)) || searching);
+    filters.kind === 'music' && (isGenreDim(dim) || (filters.focus !== null && isGenreDim(filters.focus.by)) || searching || treeSeen);
   const genreArtists = useMemo(
     () => (wantGenres ? topBy(kindPlays, 'artist', 'plays', Infinity).map((r) => r.artist) : []),
     [wantGenres, kindPlays],
@@ -163,6 +166,12 @@ export default function Dashboard({ data, onReset }: Props) {
       ? `Looking up release years… ${done} of ${total} albums. Covers ${pct}% of plays so far.`
       : `Decade the album first came out, from MusicBrainz. Known for ${pct}% of plays in this range; the rest are left out. Compilations count by their own release year.`;
   }, [dim, rankPlays, releaseProgress]);
+  const treeNote = useMemo(() => {
+    const { done, total } = genreProgress;
+    if (total < 0) return 'Loading genres…';
+    if (done < total) return `Looking up genres… ${done} of ${total} artists.`;
+    return undefined;
+  }, [genreProgress]);
   const dimNote = isGenreDim(viewDim) ? genreNote : decadeNote;
 
   const isMusic = filters.kind === 'music';
@@ -245,6 +254,9 @@ export default function Dashboard({ data, onReset }: Props) {
           genres={genres}
           unit={unit}
         />
+        {isMusic && (
+          <GenreTree plays={filtered} genres={genres} metric={metric} note={treeNote} onVisible={onTreeVisible} />
+        )}
         <PeriodTable
           plays={filtered}
           from={filters.from}

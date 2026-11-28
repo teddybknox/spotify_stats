@@ -239,3 +239,34 @@ code { font-size: 0.9em; background: var(--accent-soft); padding: 1px 5px; borde
 .search-kind { flex: none; width: 52px; font-size: 0.75rem; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.03em; }
 .search-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .search-plays { flex: none; font-size: 0.8rem; color: var(--text-2); font-variant-numeric: tabular-nums; }
+
+/* Genre tree */
+.tree-search { flex: 0 1 260px; min-width: 180px; }
+.tree-search .search-kind { width: 64px; }
+.tree-scroll { overflow: auto; max-height: 760px; border-top: 1px solid var(--border); }
+.tree-cols { position: sticky; top: 0; z-index: 2; height: 26px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.tree-cols span {
+  position: absolute; top: 6px; font-size: 0.75rem; color: var(--text-2);
+  text-transform: uppercase; letter-spacing: 0.03em;
+}
+.tree-stage { position: relative; }
+.tree-stage svg { position: absolute; inset: 0; overflow: visible; }
+.tree-link { fill: none; stroke: var(--bar); stroke-opacity: 0.32; transition: d 0.25s ease, stroke-width 0.25s ease; }
+.tree-link.more { stroke-opacity: 0.16; }
+.tree-link.on { stroke: var(--accent); stroke-opacity: 0.85; }
+.tree-node {
+  position: absolute; box-sizing: border-box; display: flex; align-items: center; gap: 6px;
+  padding: 0 8px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface);
+  font-size: 0.82rem; text-align: left; color: var(--text); cursor: pointer;
+  transition: top 0.25s ease;
+}
+.tree-node:hover { border-color: var(--accent); }
+.tree-node.open { border-color: var(--accent); background: var(--accent-soft); }
+.tree-node.leaf { cursor: default; }
+.tree-node.on { border-color: var(--accent); }
+.tree-node.hit { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); background: var(--accent-soft); font-weight: 600; }
+.tree-node.more { border-style: dashed; color: var(--text-2); }
+.tree-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tree-val { flex: none; color: var(--text-2); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+.tree-caret { flex: none; width: 14px; text-align: center; color: var(--accent); font-weight: 600; }
+@media (prefers-reduced-motion: reduce) { .tree-link, .tree-node { transition: none; } }
