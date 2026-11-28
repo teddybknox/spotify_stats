@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 
 // Validated categorical palette (fixed order; never cycled) and sequential blue ramp.
 const LIGHT = {
@@ -31,7 +31,11 @@ function isDark(): boolean {
   return mq().matches;
 }
 
+/** Story cards are always dark, whatever the page theme. */
+export const ForceDark = createContext(false);
+
 export function usePalette(): Palette {
+  const forced = useContext(ForceDark);
   const [dark, setDark] = useState(isDark);
   useEffect(() => {
     const m = mq();
@@ -44,7 +48,7 @@ export function usePalette(): Palette {
       obs.disconnect();
     };
   }, []);
-  return dark ? DARK : LIGHT;
+  return forced || dark ? DARK : LIGHT;
 }
 
 /** Pick a ramp step for a value in [0, 1]. */

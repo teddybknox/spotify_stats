@@ -9,6 +9,8 @@ import Heatmap from './Heatmap';
 import DiscoveryChart from './DiscoveryChart';
 import PeriodTable from './PeriodTable';
 import GenreTree from './GenreTree';
+import SummaryCard from './SummaryCard';
+import { ShareContext, type ShareInfo } from './Share';
 import { albumKey, applyFilters, buildSearchIndex, isGenreDim, itemKey, summarize, topBy, type Dim, type Filters, type GenreMap, type Metric, type Unit } from '../lib/stats';
 import { loadGenres } from '../lib/deezer';
 import { loadReleaseYears, type YearMap } from '../lib/releases';
@@ -32,6 +34,7 @@ export default function Dashboard({ data, onReset }: Props) {
   const [searching, setSearching] = useState(false);
   const [treeSeen, setTreeSeen] = useState(false);
   const onTreeVisible = useCallback(() => setTreeSeen(true), []);
+  const [summarySeen, setSummarySeen] = useState(false);
 
   // Release years are looked up only once someone asks for decades; each play then carries its album's year.
   const wantDecades = dim === 'decade' || focusBy === 'decade' || searching;
@@ -91,7 +94,7 @@ export default function Dashboard({ data, onReset }: Props) {
 
   // Genres are looked up only once someone asks for them.
   const wantGenres =
-    filters.kind === 'music' && (isGenreDim(dim) || (filters.focus !== null && isGenreDim(filters.focus.by)) || searching || treeSeen);
+    filters.kind === 'music' && (isGenreDim(dim) || (filters.focus !== null && isGenreDim(filters.focus.by)) || searching || treeSeen || summarySeen);
   const genreArtists = useMemo(
     () => (wantGenres ? topBy(kindPlays, 'artist', 'plays', Infinity).map((r) => r.artist) : []),
     [wantGenres, kindPlays],
@@ -175,6 +178,29 @@ export default function Dashboard({ data, onReset }: Props) {
   const dimNote = isGenreDim(viewDim) ? genreNote : decadeNote;
 
   const isMusic = filters.kind === 'music';
+
+  // What the story cards say about the current view.
+  const range = useMemo(() => {
+    const { from, to } = filters;
+    if (from === minDay && to === maxDay) return 'All time';
+    const y = from.slice(0, 4);
+    if (to.slice(0, 4) === y && (from === `${y}-01-01` || from === minDay) && (to === `${y}-12-31` || to === maxDay)) return y;
+    const short = (d: string) => fmtDay(d).replace(/^(\w{3})\w* /, '$1 ');
+    return `${short(from)} – ${short(to)}`;
+  }, [filters, minDay, maxDay]);
+  const share = useMemo<ShareInfo>(
+    () => ({
+      range,
+      detail: [
+        metric === 'plays' ? 'By plays' : 'By time listened',
+        filters.kind === 'podcast' ? 'Podcasts' : null,
+        filters.focus ? `Only ${filters.focus.label}` : null,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+    }),
+    [range, metric, filters.kind, filters.focus],
+  );
   const noun = DIM_LABELS[viewDim][filters.kind].toLowerCase();
   const nounIn = drillTop ? `${noun} in ${drillTop}` : noun;
 
@@ -189,9 +215,21 @@ export default function Dashboard({ data, onReset }: Props) {
             {data.format === 'basic' && ' · account data export (last 12 months only)'}
           </p>
         </div>
-        <button className="ghost" onClick={onReset}>
-          Load another file
-        </button>
+        <div className="topbar-actions">
+          <ShareContext.Provider value={share}>
+            <SummaryCard
+              plays={filtered}
+              genres={genres}
+              metric={metric}
+              kind={filters.kind}
+              range={range}
+              onOpen={() => setSummarySeen(true)}
+            />
+          </ShareContext.Provider>
+          <button className="ghost" onClick={onReset}>
+            Load another file
+          </button>
+        </div>
       </header>
 
       <FilterBar
@@ -220,6 +258,7 @@ export default function Dashboard({ data, onReset }: Props) {
 
       <StatTiles s={summary} kind={filters.kind} />
 
+      <ShareContext.Provider value={share}>
       <div className="grid">
         <TopOverTime
           plays={filtered}
@@ -268,6 +307,7 @@ export default function Dashboard({ data, onReset }: Props) {
           onPick={(focus) => setFilters({ ...filters, focus })}
         />
       </div>
+      </ShareContext.Provider>
 
       <footer className="foot muted">
         Your listening data never leaves this browser tab. Times are shown in your current time zone.

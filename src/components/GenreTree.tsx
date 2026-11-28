@@ -137,8 +137,9 @@ export default function GenreTree({ plays, genres, metric, note, onVisible }: Pr
   }, [onVisible]);
 
   useLayoutEffect(() => {
-    if (!scrollTo || !wrap.current) return;
-    const el = wrap.current.querySelector<HTMLElement>(`[data-id="${CSS.escape(scrollTo)}"]`);
+    if (!scrollTo) return;
+    // The first match is the panel itself (a story card copy, if open, comes later in the page).
+    const el = document.querySelector<HTMLElement>(`[data-id="${CSS.escape(scrollTo)}"]`);
     el?.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
     setScrollTo(null);
   }, [scrollTo, layout, path]);
