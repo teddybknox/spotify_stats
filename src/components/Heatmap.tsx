@@ -44,6 +44,7 @@ export default function Heatmap({ plays, metric }: { plays: Play[]; metric: Metr
                 className={`hm-cell${hover && hover.d === d && hover.h === h ? ' hot' : ''}`}
                 style={{ background: v > 0 ? rampColor(pal, v / max) : undefined }}
                 onMouseEnter={() => setHover({ d, h })}
+                onClick={() => setHover({ d, h })}
                 title={`${DAYS[d]} ${hourLabel(h)}: ${fmtMeasure(v, metric)}`}
               />
             ))}

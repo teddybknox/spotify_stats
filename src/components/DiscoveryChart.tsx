@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Area, Bar, CartesianGrid, ComposedChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import Card from './Card';
-import { TipBox } from './ChartTooltip';
+import { TipBox, TipCloseProvider, useTapTip } from './ChartTooltip';
 import { discovery, type Dim, type GenreMap, type Unit } from '../lib/stats';
 import { fmtInt, fmtPeriod, fmtPeriodShort } from '../lib/format';
 import { usePalette } from '../lib/theme';
@@ -21,6 +21,7 @@ interface Props {
 
 export default function DiscoveryChart({ allPlays, from, to, by, noun, genres, unit }: Props) {
   const pal = usePalette();
+  const tip = useTapTip();
   const data = useMemo(() => discovery(allPlays, from, to, by, genres, unit), [allPlays, from, to, by, genres, unit]);
   const layers = [
     { key: 'fresh', label: 'New to you', color: pal.series[0] },
@@ -41,8 +42,9 @@ export default function DiscoveryChart({ allPlays, from, to, by, noun, genres, u
         ))}
       </ul>
       <div className="chart" style={{ height: 232 }}>
+        <TipCloseProvider value={tip.close}>
         <ResponsiveContainer>
-          <ComposedChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+          <ComposedChart {...tip.chartProps} data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
             <CartesianGrid stroke={pal.grid} vertical={false} />
             <XAxis
               dataKey="period"
@@ -54,6 +56,7 @@ export default function DiscoveryChart({ allPlays, from, to, by, noun, genres, u
             />
             <YAxis stroke={pal.axis} tick={{ fontSize: 12, fill: pal.axis }} tickLine={false} axisLine={false} width={56} allowDecimals={false} />
             <Tooltip
+              {...tip.tooltipProps}
               cursor={unit === 'month' ? { stroke: pal.axis, strokeDasharray: '3 3' } : { fill: pal.grid, opacity: 0.6 }}
               content={({ active, payload }) => {
                 if (!active || !payload?.length) return null;
@@ -95,6 +98,7 @@ export default function DiscoveryChart({ allPlays, from, to, by, noun, genres, u
             )}
           </ComposedChart>
         </ResponsiveContainer>
+        </TipCloseProvider>
       </div>
     </Card>
   );

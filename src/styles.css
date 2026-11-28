@@ -311,3 +311,52 @@ code { font-size: 0.9em; background: var(--accent-soft); padding: 1px 5px; borde
   .filter-row .chip.removable { grid-column: 1 / -1; justify-self: start; }
   .chips { padding-bottom: 4px; }
 }
+
+/* Chart popups on touch screens */
+.tip-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.tip-close {
+  flex: none; width: 28px; height: 28px; margin: -6px -6px -4px 0; border: 0; border-radius: 50%;
+  background: transparent; color: var(--text-2); font-size: 1.2rem; line-height: 1;
+}
+.tip-close:hover, .tip-close:active { background: var(--accent-soft); color: var(--text); }
+
+/* Genre tree on phones: one level at a time */
+.ptree { border-top: 1px solid var(--border); padding-top: 8px; }
+.ptree-nav { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ptree-back {
+  flex: none; border: 1px solid var(--border); background: var(--surface); border-radius: 999px;
+  padding: 6px 14px; font-size: 0.87rem;
+}
+.ptree-back:disabled { opacity: 0.4; cursor: default; }
+.ptree-crumbs {
+  flex: 1; min-width: 0; display: flex; align-items: center; list-style: none; margin: 0; padding: 0;
+  overflow-x: auto; scrollbar-width: none; white-space: nowrap; font-size: 0.85rem;
+}
+.ptree-crumbs::-webkit-scrollbar { display: none; }
+.ptree-crumbs li + li::before { content: '›'; color: var(--text-2); margin: 0 4px; }
+.ptree-crumbs button { border: 0; background: transparent; padding: 6px 2px; color: var(--accent); }
+.ptree-crumbs [aria-current] { font-weight: 600; }
+.ptree-head {
+  display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap;
+  margin: 10px 0 4px; font-size: 0.8rem; color: var(--text-2);
+}
+.ptree-list { list-style: none; margin: 0; padding: 0; }
+.ptree-list li + li { border-top: 1px solid var(--border); }
+.ptree-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto 14px; gap: 10px; align-items: center;
+  width: 100%; min-height: 48px; padding: 6px 4px; text-align: left; background: transparent; border: 0; border-radius: 8px;
+}
+.ptree-row:disabled { cursor: default; color: var(--text); }
+.ptree-row:not(:disabled):active { background: var(--accent-soft); }
+.ptree-row.hit { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.ptree-text { display: flex; flex-direction: column; min-width: 0; }
+.ptree-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ptree-sub { color: var(--text-2); font-size: 0.78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ptree-val { display: flex; flex-direction: column; align-items: flex-end; font-variant-numeric: tabular-nums; font-size: 0.9rem; }
+.ptree-val small { color: var(--text-2); font-size: 0.75rem; }
+.ptree-chev { color: var(--accent); font-size: 1.3rem; line-height: 1; }
+.ptree-more { display: block; width: 100%; margin-top: 8px; padding: 10px; }
+@media (max-width: 600px) {
+  .tree-search { flex: 1 1 100%; }
+}
+.recharts-wrapper:focus, .recharts-wrapper *:focus { outline: none; }

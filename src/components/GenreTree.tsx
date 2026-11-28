@@ -12,8 +12,10 @@ import {
   searchTree,
   type Level,
   type TreeHit,
+  sortedChildren,
   type TreeNode,
 } from '../lib/tree';
+import { NARROW, useMedia } from '../lib/useMedia';
 import type { Play } from '../lib/types';
 
 interface Props {
@@ -28,6 +30,8 @@ interface Props {
 /** Children shown per node before a "+X more" row. */
 const LIMIT = 10;
 const ROW = 34;
+/** Rows shown per list on phones before "Show more". */
+const PHONE_LIMIT = 20;
 const CHIP = 26;
 const GAP = 64;
 const PAD = 8;
@@ -46,6 +50,15 @@ const LEVEL_NAME: Record<Level, string> = {
   track: 'Track',
 };
 
+const PLURAL: Record<Level, string> = {
+  root: 'All',
+  genre: 'Genres',
+  subgenre: 'Sub-genres',
+  artist: 'Artists',
+  album: 'Albums',
+  track: 'Tracks',
+};
+
 const fmtVal = (plays: number, hours: number, metric: Metric) =>
   metric === 'plays' ? fmtInt(plays) : fmtHours(hours);
 
@@ -58,6 +71,10 @@ export default function GenreTree({ plays, genres, metric, note, onVisible }: Pr
   const [limits, setLimits] = useState<Map<string, number>>(() => new Map());
   const [hit, setHit] = useState<string | null>(null);
   const [scrollTo, setScrollTo] = useState<string | null>(null);
+  const narrow = useMedia(NARROW);
+  // Phones show one level at a time: the ids from the root down to the list being shown.
+  const [path, setPath] = useState<string[]>([]);
+  const [phoneLimits, setPhoneLimits] = useState<Map<string, number>>(() => new Map());
   // New data keeps what's open; a different set of levels starts again from the top.
   const lastLevels = useRef(levelsKey);
   useEffect(() => {
@@ -65,6 +82,8 @@ export default function GenreTree({ plays, genres, metric, note, onVisible }: Pr
       lastLevels.current = levelsKey;
       setLimits(new Map());
       setHit(null);
+      setPath([]);
+      setPhoneLimits(new Map());
       setExpanded(autoExpand(root, new Set()));
     } else setExpanded((e) => autoExpand(root, e));
   }, [root, levelsKey]);
@@ -118,11 +137,11 @@ export default function GenreTree({ plays, genres, metric, note, onVisible }: Pr
   }, [onVisible]);
 
   useLayoutEffect(() => {
-    if (!scrollTo || !stage.current) return;
-    const el = stage.current.querySelector<HTMLElement>(`[data-id="${CSS.escape(scrollTo)}"]`);
+    if (!scrollTo || !wrap.current) return;
+    const el = wrap.current.querySelector<HTMLElement>(`[data-id="${CSS.escape(scrollTo)}"]`);
     el?.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
     setScrollTo(null);
-  }, [scrollTo, layout]);
+  }, [scrollTo, layout, path]);
 
   const toggle = (n: TreeNode) => {
     if (!n.children.length) return;
@@ -138,6 +157,19 @@ export default function GenreTree({ plays, genres, metric, note, onVisible }: Pr
     setLimits((l) => new Map(l).set(parent.id, (l.get(parent.id) ?? LIMIT) + LIMIT));
 
   const find = (n: TreeNode) => {
+    if (narrow) {
+      const ids: string[] = [];
+      for (let p = n.parent; p && p.parent; p = p.parent) ids.unshift(p.id);
+      setPath(ids);
+      if (n.parent) {
+        const i = sortedChildren(n.parent, metric).indexOf(n);
+        const id = n.parent.id;
+        setPhoneLimits((l) => new Map(l).set(id, Math.max(l.get(id) ?? PHONE_LIMIT, Math.ceil((i + 1) / PHONE_LIMIT) * PHONE_LIMIT)));
+      }
+      setHit(n.id);
+      setScrollTo(n.id);
+      return;
+    }
     const r = reveal(n, expanded, limits, metric, LIMIT);
     setExpanded(r.expanded);
     setLimits(r.limits);
@@ -146,6 +178,7 @@ export default function GenreTree({ plays, genres, metric, note, onVisible }: Pr
   };
 
   const collapseAll = () => {
+    setPath([]);
     setExpanded(autoExpand(root, new Set()));
     setLimits(new Map());
     setHit(null);
@@ -161,7 +194,7 @@ export default function GenreTree({ plays, genres, metric, note, onVisible }: Pr
       title="Genre tree"
       subtitle={
         note ??
-        `${levels.map((l) => LEVEL_NAME[l]).join(' → ')}. Click a box to open it. Branch thickness and order follow ${
+        `${levels.map((l) => LEVEL_NAME[l]).join(' → ')}. ${narrow ? 'Tap a row to open it.' : 'Click a box to open it.'} ${narrow ? 'Bars and order' : 'Branch'} ${narrow ? '' : 'thickness and order '}follow ${
           metric === 'plays' ? 'plays' : 'time listened'
         }.`
       }
@@ -169,7 +202,7 @@ export default function GenreTree({ plays, genres, metric, note, onVisible }: Pr
         <>
           <TreeSearch root={root} onPick={find} />
           <button className="ghost" onClick={collapseAll}>
-            Collapse all
+            {narrow ? 'Back to top' : 'Collapse all'}
           </button>
         </>
       }
@@ -195,6 +228,16 @@ export default function GenreTree({ plays, genres, metric, note, onVisible }: Pr
         </div>
         {root.plays === 0 ? (
           <p className="empty">Nothing in this range.</p>
+        ) : narrow ? (
+          <PhoneTree
+            root={root}
+            path={path}
+            setPath={setPath}
+            metric={metric}
+            hit={hit}
+            limits={phoneLimits}
+            showMore={(id) => setPhoneLimits((l) => new Map(l).set(id, (l.get(id) ?? PHONE_LIMIT) + PHONE_LIMIT))}
+          />
         ) : (
           <div className="tree-scroll">
             <div className="tree-cols" style={{ width }}>
@@ -267,6 +310,104 @@ export default function GenreTree({ plays, genres, metric, note, onVisible }: Pr
         )}
       </div>
     </Card>
+  );
+}
+
+interface PhoneProps {
+  root: TreeNode;
+  path: string[];
+  setPath: (p: string[]) => void;
+  metric: Metric;
+  hit: string | null;
+  limits: Map<string, number>;
+  showMore: (id: string) => void;
+}
+
+/** One level at a time, like folders: tap a row to open it, Back or the trail above to go up. */
+function PhoneTree({ root, path, setPath, metric, hit, limits, showMore }: PhoneProps) {
+  // Follow the path as far as it still exists (new data or filters can remove a branch).
+  const trail: TreeNode[] = [root];
+  for (const id of path) {
+    const next = trail[trail.length - 1].children.find((c) => c.id === id);
+    if (!next) break;
+    trail.push(next);
+  }
+  const cur = trail[trail.length - 1];
+  const kids = useMemo(() => sortedChildren(cur, metric), [cur, metric]);
+  const limit = limits.get(cur.id) ?? PHONE_LIMIT;
+  const top = kids[0]?.[metric] || 1;
+  const childLevel = kids[0]?.level;
+  const ids = trail.slice(1).map((n) => n.id);
+  const crumbs = useRef<HTMLOListElement>(null);
+  useEffect(() => {
+    const el = crumbs.current;
+    if (el) el.scrollLeft = el.scrollWidth;
+  }, [cur.id]);
+
+  return (
+    <div className="ptree">
+      <nav className="ptree-nav" aria-label="Where you are in the tree">
+        <button className="ptree-back" onClick={() => setPath(ids.slice(0, -1))} disabled={trail.length === 1} aria-label="Back up one level">
+          ‹ Back
+        </button>
+        <ol className="ptree-crumbs" ref={crumbs}>
+          {trail.map((n, i) => (
+            <li key={n.id}>
+              {i < trail.length - 1 ? (
+                <button onClick={() => setPath(ids.slice(0, i))}>{n.name}</button>
+              ) : (
+                <span aria-current="location">{n.name}</span>
+              )}
+            </li>
+          ))}
+        </ol>
+      </nav>
+      <div className="ptree-head">
+        <span>
+          {fmtInt(kids.length)} {childLevel ? (kids.length === 1 ? LEVEL_NAME[childLevel] : PLURAL[childLevel]).toLowerCase() : 'items'}
+        </span>
+        <span>
+          {metric === 'plays' ? `${fmtInt(cur.plays)} plays` : fmtHours(cur.hours)}
+          {cur.parent && ` · ${Math.round((cur[metric] / (cur.parent[metric] || 1)) * 100)}% of ${cur.parent.name}`}
+        </span>
+      </div>
+      <ul className="ptree-list">
+        {kids.slice(0, limit).map((c) => {
+          const share = cur[metric] ? c[metric] / cur[metric] : 0;
+          const open = c.children.length > 0;
+          return (
+            <li key={c.id}>
+              <button
+                data-id={c.id}
+                className={`ptree-row${hit === c.id ? ' hit' : ''}`}
+                disabled={!open}
+                onClick={() => setPath([...ids, c.id])}
+              >
+                <span className="ptree-text">
+                  <span className="ptree-name">{c.name}</span>
+                  {c.by && <span className="ptree-sub">{c.by}</span>}
+                  <span className="bar-track">
+                    <span className="bar" style={{ width: `${Math.max(1, (c[metric] / top) * 100)}%` }} />
+                  </span>
+                </span>
+                <span className="ptree-val">
+                  {fmtVal(c.plays, c.hours, metric)}
+                  <small>{share >= 0.01 ? `${Math.round(share * 100)}%` : '<1%'}</small>
+                </span>
+                <span className="ptree-chev" aria-hidden>
+                  {open ? '›' : ''}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {kids.length > limit && (
+        <button className="ghost ptree-more" onClick={() => showMore(cur.id)}>
+          Show {fmtInt(Math.min(PHONE_LIMIT, kids.length - limit))} more of {fmtInt(kids.length - limit)}
+        </button>
+      )}
+    </div>
   );
 }
 
