@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import Card, { Segmented } from './Card';
-import { TipBox } from './ChartTooltip';
+import { TipBox, TipCloseProvider, useTapTip } from './ChartTooltip';
 import { dailyTotals, type Metric } from '../lib/stats';
 import { fmtAxis, fmtDay, fmtMeasure, fmtMonthShort, niceStep } from '../lib/format';
 import { usePalette } from '../lib/theme';
@@ -17,6 +17,7 @@ interface Props {
 export default function DailyChart({ plays, from, to, metric }: Props) {
   const [window, setWindow] = useState(7);
   const pal = usePalette();
+  const tip = useTapTip();
   const data = useMemo(() => dailyTotals(plays, from, to, window, metric), [plays, from, to, window, metric]);
   const long = data.length > 400;
   const ticks = useMemo(() => {
@@ -48,8 +49,9 @@ export default function DailyChart({ plays, from, to, metric }: Props) {
       }
     >
       <div className="chart" style={{ height: 280 }}>
+        <TipCloseProvider value={tip.close}>
         <ResponsiveContainer>
-          <LineChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+          <LineChart {...tip.chartProps} data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
             <CartesianGrid stroke={pal.grid} vertical={false} />
             <XAxis
               dataKey="day"
@@ -70,6 +72,7 @@ export default function DailyChart({ plays, from, to, metric }: Props) {
               tickFormatter={(v: number) => fmtAxis(v, metric)}
             />
             <Tooltip
+              {...tip.tooltipProps}
               cursor={{ stroke: pal.axis, strokeDasharray: '3 3' }}
               content={({ active, payload }) => {
                 if (!active || !payload?.length) return null;
@@ -97,6 +100,7 @@ export default function DailyChart({ plays, from, to, metric }: Props) {
             />
           </LineChart>
         </ResponsiveContainer>
+        </TipCloseProvider>
       </div>
     </Card>
   );

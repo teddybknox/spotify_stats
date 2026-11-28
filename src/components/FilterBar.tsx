@@ -1,7 +1,7 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { Dim, Filters, Unit } from '../lib/stats';
 import type { Kind } from '../lib/types';
-import type { Measure } from '../lib/format';
+import { fmtDay, type Measure } from '../lib/format';
 import { Segmented } from './Card';
 
 interface Props {
@@ -29,6 +29,22 @@ export const DIM_LABELS: Record<Dim, { music: string; podcast: string }> = {
   decade: { music: 'Decades', podcast: '' },
 };
 
+const OPEN_KEY = 'spotify-stats:settings-open';
+
+function initialOpen(): boolean {
+  try {
+    const saved = localStorage.getItem(OPEN_KEY);
+    if (saved === '1' || saved === '0') return saved === '1';
+  } catch {
+    /* storage unavailable */
+  }
+  return typeof window === 'undefined' || !window.matchMedia('(max-width: 700px)').matches;
+}
+
+function shortDay(day: string): string {
+  return fmtDay(day).replace(/^(\w{3})\w* /, '$1 ');
+}
+
 function shiftYear(day: string, years: number): string {
   const [y, m, d] = day.split('-');
   return `${Number(y) + years}-${m}-${d}`;
@@ -46,23 +62,77 @@ export default function FilterBar({ filters, setFilters, minDay, maxDay, years, 
     ...[...years].reverse().map((y) => ({ label: String(y), from: clamp(`${y}-01-01`), to: clamp(`${y}-12-31`) })),
   ];
 
-  return (
-    <div className="filterbar">
-      <div className="chips" role="group" aria-label="Date range">
-        {presets.map((p) => (
-          <button
-            key={p.label}
-            className={`chip${filters.from === p.from && filters.to === p.to ? ' on' : ''}`}
-            onClick={() => set({ from: p.from, to: p.to })}
-          >
-            {p.label}
+  const [open, setOpen] = useState(initialOpen);
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    try {
+      localStorage.setItem(OPEN_KEY, next ? '1' : '0');
+    } catch {
+      /* storage unavailable */
+    }
+  };
+
+  const preset = presets.find((p) => filters.from === p.from && filters.to === p.to);
+  const summary = [
+    preset ? preset.label : `${shortDay(filters.from)} – ${shortDay(filters.to)}`,
+    filters.kind === 'podcast' ? 'Podcasts' : null,
+    measure === 'plays' ? 'Plays' : 'Time',
+    DIM_LABELS[dim][filters.kind],
+    unit === 'month' ? 'By month' : 'By year',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  const focusChip = filters.focus && (
+    <button className="chip on removable" onClick={() => set({ focus: null })} aria-label="Clear focus">
+      {filters.focus.label} <span aria-hidden>×</span>
+    </button>
+  );
+
+  const toggleButton = (
+    <button className="settings-toggle" onClick={toggle} aria-expanded={open} aria-controls="filter-settings">
+      {open ? 'Hide' : 'Settings'}
+      <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden className={open ? 'up' : ''}>
+        <path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </button>
+  );
+
+  if (!open) {
+    return (
+      <div className="filterbar collapsed">
+        <div className="filter-collapsed">
+          <button className="filter-summary" onClick={toggle} aria-label={`Show settings. Current: ${summary}`}>
+            {summary}
           </button>
-        ))}
+          {focusChip}
+          {toggleButton}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="filterbar" id="filter-settings">
+      <div className="filter-top">
+        <div className="chips" role="group" aria-label="Date range">
+          {presets.map((p) => (
+            <button
+              key={p.label}
+              className={`chip${filters.from === p.from && filters.to === p.to ? ' on' : ''}`}
+              onClick={() => set({ from: p.from, to: p.to })}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        {toggleButton}
       </div>
       <div className="filter-row">
         {search}
         <div className="measure">
-          Measure by
+          <span className="ctl-label">Measure by</span>
           <Segmented
             label="Measure by"
             value={measure}
@@ -74,16 +144,7 @@ export default function FilterBar({ filters, setFilters, minDay, maxDay, years, 
           />
         </div>
         <div className="measure">
-          Rank
-          <Segmented
-            label="Rank"
-            value={dim}
-            onChange={setDim}
-            options={dims.map((d) => ({ value: d, label: DIM_LABELS[d][filters.kind] }))}
-          />
-        </div>
-        <div className="measure">
-          Group by
+          <span className="ctl-label">Group by</span>
           <Segmented
             label="Group by"
             value={unit}
@@ -94,10 +155,19 @@ export default function FilterBar({ filters, setFilters, minDay, maxDay, years, 
             ]}
           />
         </div>
+        <div className="measure rank-ctl">
+          <span className="ctl-label">Rank</span>
+          <Segmented
+            label="Rank"
+            value={dim}
+            onChange={setDim}
+            options={dims.map((d) => ({ value: d, label: DIM_LABELS[d][filters.kind] }))}
+          />
+        </div>
       </div>
       <div className="filter-row">
         <label>
-          From
+          <span className="ctl-label">From</span>
           <input
             type="date"
             min={minDay}
@@ -107,7 +177,7 @@ export default function FilterBar({ filters, setFilters, minDay, maxDay, years, 
           />
         </label>
         <label>
-          To
+          <span className="ctl-label">To</span>
           <input
             type="date"
             min={filters.from}
@@ -118,7 +188,7 @@ export default function FilterBar({ filters, setFilters, minDay, maxDay, years, 
         </label>
         {hasPodcasts && (
           <label>
-            Listening to
+            <span className="ctl-label">Listening to</span>
             <select
               value={filters.kind}
               onChange={(e) => {
@@ -133,18 +203,14 @@ export default function FilterBar({ filters, setFilters, minDay, maxDay, years, 
           </label>
         )}
         <label title="Plays shorter than this are ignored. Spotify itself counts a stream after 30 seconds.">
-          Count plays over
+          <span className="ctl-label">Count plays over</span>
           <select value={filters.minSeconds} onChange={(e) => set({ minSeconds: Number(e.target.value) })}>
             <option value={0}>any length</option>
             <option value={30}>30 seconds</option>
             <option value={60}>1 minute</option>
           </select>
         </label>
-        {filters.focus && (
-          <button className="chip on removable" onClick={() => set({ focus: null })} aria-label="Clear focus">
-            {filters.focus.label} <span aria-hidden>×</span>
-          </button>
-        )}
+        {focusChip}
       </div>
     </div>
   );
