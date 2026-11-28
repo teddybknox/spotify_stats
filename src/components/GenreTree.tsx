@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Card from './Card';
 import { fmtHours, fmtInt } from '../lib/format';
 import type { GenreMap, Metric } from '../lib/stats';
@@ -16,6 +16,7 @@ import {
   type TreeNode,
 } from '../lib/tree';
 import { NARROW, useMedia } from '../lib/useMedia';
+import { InStory, StorySwitch } from './Share';
 import type { Play } from '../lib/types';
 
 interface Props {
@@ -58,6 +59,9 @@ const PLURAL: Record<Level, string> = {
   album: 'Albums',
   track: 'Tracks',
 };
+
+/** Node ids join names with a control character, which isn't allowed in saved story images; this makes them safe for the page. */
+const domId = (id: string) => encodeURIComponent(id);
 
 const fmtVal = (plays: number, hours: number, metric: Metric) =>
   metric === 'plays' ? fmtInt(plays) : fmtHours(hours);
@@ -139,7 +143,7 @@ export default function GenreTree({ plays, genres, metric, note, onVisible }: Pr
   useLayoutEffect(() => {
     if (!scrollTo) return;
     // The first match is the panel itself (a story card copy, if open, comes later in the page).
-    const el = document.querySelector<HTMLElement>(`[data-id="${CSS.escape(scrollTo)}"]`);
+    const el = document.querySelector<HTMLElement>(`[data-id="${CSS.escape(domId(scrollTo))}"]`);
     el?.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
     setScrollTo(null);
   }, [scrollTo, layout, path]);
@@ -189,6 +193,18 @@ export default function GenreTree({ plays, genres, metric, note, onVisible }: Pr
   const height = Math.max(layout.rows, 1) * ROW + PAD * 2;
   const cy = (y: number) => PAD + y * ROW + ROW / 2;
 
+  const phoneTree = (
+          <PhoneTree
+            root={root}
+            path={path}
+            setPath={setPath}
+            metric={metric}
+            hit={hit}
+            limits={phoneLimits}
+            showMore={(id) => setPhoneLimits((l) => new Map(l).set(id, (l.get(id) ?? PHONE_LIMIT) + PHONE_LIMIT))}
+          />
+  );
+
   return (
     <Card
       wide
@@ -230,16 +246,9 @@ export default function GenreTree({ plays, genres, metric, note, onVisible }: Pr
         {root.plays === 0 ? (
           <p className="empty">Nothing in this range.</p>
         ) : narrow ? (
-          <PhoneTree
-            root={root}
-            path={path}
-            setPath={setPath}
-            metric={metric}
-            hit={hit}
-            limits={phoneLimits}
-            showMore={(id) => setPhoneLimits((l) => new Map(l).set(id, (l.get(id) ?? PHONE_LIMIT) + PHONE_LIMIT))}
-          />
+          phoneTree
         ) : (
+          <StorySwitch story={phoneTree}>
           <div className="tree-scroll">
             <div className="tree-cols" style={{ width }}>
               {levels.map((l, i) => (
@@ -274,7 +283,7 @@ export default function GenreTree({ plays, genres, metric, note, onVisible }: Pr
                 return (
                   <button
                     key={n.id}
-                    data-id={n.id}
+                    data-id={domId(n.id)}
                     className={`tree-node${open ? ' open' : ''}${n.children.length ? '' : ' leaf'}${
                       hit === n.id ? ' hit' : onPath.has(n.id) ? ' on' : ''
                     }`}
@@ -308,6 +317,7 @@ export default function GenreTree({ plays, genres, metric, note, onVisible }: Pr
               ))}
             </div>
           </div>
+          </StorySwitch>
         )}
       </div>
     </Card>
@@ -335,7 +345,9 @@ function PhoneTree({ root, path, setPath, metric, hit, limits, showMore }: Phone
   }
   const cur = trail[trail.length - 1];
   const kids = useMemo(() => sortedChildren(cur, metric), [cur, metric]);
-  const limit = limits.get(cur.id) ?? PHONE_LIMIT;
+  // A story card shows the top 10 only.
+  const story = useContext(InStory);
+  const limit = story ? 10 : (limits.get(cur.id) ?? PHONE_LIMIT);
   const top = kids[0]?.[metric] || 1;
   const childLevel = kids[0]?.level;
   const ids = trail.slice(1).map((n) => n.id);
@@ -379,7 +391,7 @@ function PhoneTree({ root, path, setPath, metric, hit, limits, showMore }: Phone
           return (
             <li key={c.id}>
               <button
-                data-id={c.id}
+                data-id={domId(c.id)}
                 className={`ptree-row${hit === c.id ? ' hit' : ''}`}
                 disabled={!open}
                 onClick={() => setPath([...ids, c.id])}
