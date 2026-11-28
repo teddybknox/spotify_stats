@@ -274,3 +274,40 @@ code { font-size: 0.9em; background: var(--accent-soft); padding: 1px 5px; borde
 .tree-levels .muted { margin: 0 4px 0 0; }
 .tree-levels .chip:disabled { opacity: 0.6; cursor: not-allowed; }
 .tree-by { color: var(--text-2); }
+
+/* Collapsible settings bar */
+.filter-top { display: flex; align-items: flex-start; gap: 8px; }
+.filter-top .chips { flex: 1; min-width: 0; }
+.settings-toggle {
+  flex: none; display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--border); background: var(--surface); border-radius: 999px;
+  padding: 4px 12px; font-size: 0.87rem; white-space: nowrap;
+}
+.settings-toggle:hover { border-color: var(--accent); }
+.settings-toggle svg { transition: transform 0.2s ease; }
+.settings-toggle svg.up { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .settings-toggle svg { transition: none; } }
+.filterbar.collapsed { padding: 8px 0; }
+.filter-collapsed { display: flex; align-items: center; gap: 8px; }
+.filter-summary {
+  flex: 1; min-width: 0; text-align: left; background: transparent; border: 0; padding: 4px 0;
+  font-size: 0.87rem; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.filter-collapsed .chip.removable { max-width: 40%; overflow: hidden; text-overflow: ellipsis; }
+.segmented button { white-space: nowrap; }
+
+/* Phone layout: two controls per row, labels above */
+@media (max-width: 600px) {
+  .filter-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; margin-top: 6px; }
+  .filter-row .search { grid-column: 1 / -1; max-width: none; }
+  .filter-row .measure, .filter-row label { flex-direction: column; align-items: stretch; gap: 2px; min-width: 0; }
+  .filter-row .ctl-label { font-size: 0.75rem; }
+  .filter-row .measure.rank-ctl { grid-column: 1 / -1; }
+  .filter-row .segmented { display: flex; }
+  .filter-row .segmented button { flex: 1; padding: 5px 8px; }
+  .filter-row .rank-ctl .segmented { overflow-x: auto; scrollbar-width: none; }
+  .filter-row .rank-ctl .segmented::-webkit-scrollbar { display: none; }
+  .filter-row input, .filter-row select { width: 100%; min-width: 0; padding: 5px 8px; }
+  .filter-row .chip.removable { grid-column: 1 / -1; justify-self: start; }
+  .chips { padding-bottom: 4px; }
+}
