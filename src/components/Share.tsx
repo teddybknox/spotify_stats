@@ -16,9 +16,28 @@ export const useShareInfo = () => useContext(ShareContext);
 /** True inside a story card, so panels can hide hints and buttons. */
 export const InStory = createContext(false);
 
+/** Shows `story` inside a story card and `children` everywhere else. */
+export function StorySwitch({ story, children }: { story: ReactNode; children: ReactNode }) {
+  return <>{useContext(InStory) ? story : children}</>;
+}
+
 const SITE = 'teddybknox.github.io/spotify_stats';
 /** Saved images are 1080 × 1920, the size of an Instagram story. */
 const OUT_W = 1080;
+/** Story cards are laid out at this size everywhere, then scaled to fit the screen, so every device saves the same picture. */
+const CARD_W = 400;
+const CARD_H = (CARD_W * 16) / 9;
+
+function useFitScale() {
+  const get = () => Math.min((window.innerWidth - 32) / CARD_W, (window.innerHeight - 110) / CARD_H, 1.6);
+  const [k, setK] = useState(get);
+  useEffect(() => {
+    const on = () => setK(get());
+    window.addEventListener('resize', on);
+    return () => window.removeEventListener('resize', on);
+  }, []);
+  return k;
+}
 
 export function ShareIcon() {
   return (
@@ -66,6 +85,7 @@ export function StoryOverlay({
   const [scale, setScale] = useState(1);
   const [cut, setCut] = useState(false);
   const [busy, setBusy] = useState(false);
+  const k = useFitScale();
   const [error, setError] = useState('');
 
   // Close with Escape; keep the page behind from scrolling.
@@ -80,13 +100,14 @@ export function StoryOverlay({
     };
   }, [onClose]);
 
-  // Shrink tall content to fit, down to 60%; anything still longer fades out at the bottom.
+  // Shrink tall content to fit; anything still longer fades out at the bottom.
   useLayoutEffect(() => {
     if (!fit) return;
     const b = body.current;
     const c = inner.current;
     if (!b || !c) return;
     const measure = () => {
+      // Tall content shrinks (down to 60%); short content is spread out by CSS instead.
       const s = Math.max(0.6, Math.min(1, b.clientHeight / Math.max(1, c.scrollHeight)));
       setScale(s);
       setCut(c.scrollHeight * s > b.clientHeight + 1);
@@ -105,11 +126,11 @@ export function StoryOverlay({
     setError('');
     try {
       const blob = await toBlob(el, {
-        pixelRatio: 1,
-        canvasWidth: OUT_W,
-        canvasHeight: (OUT_W * 16) / 9,
+        pixelRatio: OUT_W / CARD_W,
+        width: CARD_W,
+        height: CARD_H,
         skipFonts: true,
-        style: { borderRadius: '0', margin: '0' },
+        style: { borderRadius: '0', margin: '0', transform: 'none' },
         // Pictures that can't be copied (some image hosts block it) are left blank instead of failing.
         imagePlaceholder: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
       });
@@ -130,7 +151,8 @@ export function StoryOverlay({
       a.download = name;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 2000);
-    } catch {
+    } catch (e) {
+      console.warn('Story image failed', e);
       setError("Couldn't make the image. You can still take a screenshot of the card.");
     } finally {
       setBusy(false);
@@ -141,7 +163,8 @@ export function StoryOverlay({
     <div className="story-overlay" role="dialog" aria-modal="true" aria-label={`${title} story card`}>
       <ForceDark.Provider value={true}>
         <InStory.Provider value={true}>
-          <div className="story" ref={frame}>
+          <div className="story-scaler" style={{ width: CARD_W * k, height: CARD_H * k }}>
+          <div className="story" ref={frame} style={{ width: CARD_W, height: CARD_H, transform: `scale(${k})` }}>
             <div className="story-in">
             <div className="story-glow" aria-hidden />
             <header className="story-head">
@@ -151,7 +174,7 @@ export function StoryOverlay({
             </header>
             <div className={`story-body${cut ? ' cut' : ''}`} ref={body}>
               <div
-                className="story-inner"
+                className={`story-inner${fit && scale >= 1 ? ' fill' : ''}`}
                 ref={inner}
                 style={fit && scale < 1 ? { transform: `scale(${scale})`, transformOrigin: 'top left', width: `${100 / scale}%` } : undefined}
               >
@@ -160,6 +183,7 @@ export function StoryOverlay({
             </div>
             <footer className="story-foot">{SITE}</footer>
             </div>
+          </div>
           </div>
         </InStory.Provider>
       </ForceDark.Provider>

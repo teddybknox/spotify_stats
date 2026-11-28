@@ -400,10 +400,11 @@ code { font-size: 0.9em; background: var(--accent-soft); padding: 1px 5px; borde
   --bg: #101014; --surface: #1b1b21; --border: #2e2e36; --text: #f4f4f6; --text-2: #a5a5b0;
   --accent: #4f9cf5; --accent-soft: #1d2b40; --bar: #4f9cf5;
   color-scheme: dark; container-type: inline-size;
-  position: relative; flex: none; overflow: hidden;
-  width: min(100%, calc((100dvh - 110px) * 9 / 16)); aspect-ratio: 9 / 16; border-radius: 18px;
+  position: relative; flex: none; overflow: hidden; transform-origin: top left;
+  border-radius: 18px;
   background: var(--bg); color: var(--text);
 }
+.story-scaler { flex: none; position: relative; }
 .story-in {
   position: relative; height: 100%; display: flex; flex-direction: column;
   padding: 9cqw 6.5cqw 4cqw; font-size: 3.9cqw;
@@ -459,3 +460,47 @@ code { font-size: 0.9em; background: var(--accent-soft); padding: 1px 5px; borde
 .wr-big { font-size: 1.55em; font-weight: 750; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.1; }
 .wr-stats .wr-label { white-space: nowrap; font-size: 0.66em; }
 .story-inner:has(> .wrapped) { height: 100%; }
+
+/* "Top of each month/year" on a story card */
+.sp-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 5cqw 4.5cqw; }
+.sp-grid.one { grid-template-columns: minmax(0, 1fr); }
+.sp-block header {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 2cqw;
+  padding-bottom: 1.5cqw; margin-bottom: 2cqw; border-bottom: 1px solid var(--border);
+}
+.sp-block header strong { font-size: 1.25em; letter-spacing: -0.01em; }
+.sp-block header span, .sp-when span { color: var(--text-2); font-size: 0.8em; font-variant-numeric: tabular-nums; }
+.sp-block ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2.2cqw; }
+.sp-block li { display: flex; align-items: center; gap: 2.2cqw; min-width: 0; }
+.sp-block .thumb { width: 10.5cqw; height: 10.5cqw; border-radius: 1.5cqw; }
+.sp-block .thumb.artist { border-radius: 50%; }
+.sp-grid.one .thumb { width: 14cqw; height: 14cqw; }
+.sp-text { display: flex; flex-direction: column; min-width: 0; }
+.sp-label {
+  font-weight: 600; font-size: 0.88em; line-height: 1.2;
+  overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere;
+}
+.sp-kind { font-size: 0.7em; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sp-grid.one .sp-label { font-size: 1em; }
+.sp-grid.one .sp-kind { font-size: 0.8em; }
+.sp-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 1.8cqw; }
+.sp-rows li { display: flex; align-items: center; gap: 2cqw; min-width: 0; }
+.sp-when { flex: none; width: 21cqw; display: flex; flex-direction: column; line-height: 1.15; }
+.sp-when strong { font-size: 0.88em; }
+.sp-rows .thumb { flex: none; width: 9cqw; height: 9cqw; border-radius: 1.3cqw; }
+.sp-rows .thumb.artist { border-radius: 50%; }
+.sp-name { flex: 1; min-width: 0; font-weight: 600; font-size: 0.88em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sp-rows li > .thumb:empty:not(.loading) { background: transparent; }
+/* Content shorter than the card: centre it, and let period blocks spread out to fill the height. */
+.story-inner.fill { min-height: 100%; display: flex; flex-direction: column; justify-content: center; }
+.story-inner.fill:has(.sp-grid, .sp-rows) { justify-content: flex-start; }
+.story-inner.fill .sp-grid { flex: 1; align-content: space-evenly; }
+.story-inner.fill .sp-rows { flex: 1; align-content: space-between; }
+/* 5 to 8 periods: smaller pictures and one line per name, so four rows fit */
+.sp-grid.tight { gap: 3.5cqw 4.5cqw; }
+.sp-grid.tight .sp-block header { padding-bottom: 1cqw; margin-bottom: 1.5cqw; }
+.sp-grid.tight .sp-block header strong { font-size: 1.1em; }
+.sp-grid.tight .sp-block ul { gap: 1.4cqw; }
+.sp-grid.tight .thumb { width: 8cqw; height: 8cqw; }
+.sp-grid.tight .sp-label { -webkit-line-clamp: 1; font-size: 0.82em; }
+.sp-grid.tight .sp-kind { font-size: 0.66em; }

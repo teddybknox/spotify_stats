@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import Card from './Card';
 import Thumb from './Thumb';
+import { StorySwitch } from './Share';
 import { fmtMeasure, fmtMonth } from '../lib/format';
 import { topPerPeriod, type Focus, type Metric, type Ranked, type Unit } from '../lib/stats';
 import type { Play } from '../lib/types';
@@ -51,6 +52,84 @@ function Cell({
   );
 }
 
+function Art({ r, kind }: { r: Ranked; kind: 'artist' | 'album' | 'track' }) {
+  return kind === 'artist' ? (
+    <Thumb kind="artist" artist={r.artist} label={r.label} />
+  ) : (
+    <Thumb kind="album" artist={r.artist} album={r.album} label={r.album || r.label} />
+  );
+}
+
+/** Story card version: one block per period with full names, laid out to fill a phone-shaped card. */
+function StoryPeriods({
+  rows,
+  label,
+  metric,
+  isMusic,
+  showThumbs,
+}: {
+  rows: ReturnType<typeof topPerPeriod>;
+  label: (p: string) => string;
+  metric: Metric;
+  isMusic: boolean;
+  showThumbs: boolean;
+}) {
+  const shown = rows.filter((r) => r.artist);
+  const kinds = (isMusic ? ['artist', 'album', 'track'] : ['artist', 'track']) as ('artist' | 'album' | 'track')[];
+  const noun = { artist: isMusic ? 'Artist' : 'Show', album: 'Album', track: isMusic ? 'Song' : 'Episode' };
+  if (!shown.length) return <p className="empty">Nothing in this range.</p>;
+
+  // Many periods: one row each, with the top artist named and the album and song as covers.
+  if (shown.length > 8) {
+    return (
+      <ol className="sp-rows">
+        {shown.map((r) => (
+          <li key={r.period}>
+            <span className="sp-when">
+              <strong>{label(r.period)}</strong>
+              <span>{fmtMeasure(r[metric], metric)}</span>
+            </span>
+            {showThumbs && <Art r={r.artist!} kind="artist" />}
+            <span className="sp-name">{r.artist!.label}</span>
+            {showThumbs && kinds.slice(1).map((k) => (r[k] ? <Art key={k} r={r[k]!} kind={k} /> : <span key={k} className="thumb" />))}
+          </li>
+        ))}
+      </ol>
+    );
+  }
+
+  return (
+    <div className={`sp-grid${shown.length <= 3 ? ' one' : shown.length > 4 ? ' tight' : ''}`}>
+      {shown.map((r) => (
+        <section key={r.period} className="sp-block">
+          <header>
+            <strong>{label(r.period)}</strong>
+            <span>{fmtMeasure(r[metric], metric)}</span>
+          </header>
+          <ul>
+            {kinds.map((k) => {
+              const it = r[k];
+              if (!it) return null;
+              return (
+                <li key={k}>
+                  {showThumbs && <Art r={it} kind={k} />}
+                  <span className="sp-text">
+                    <span className="sp-label">{it.label}</span>
+                    <span className="sp-kind">
+                      {noun[k]}
+                      {k !== 'artist' && it.sub && ` · ${it.sub}`}
+                    </span>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ))}
+    </div>
+  );
+}
+
 export default function PeriodTable({ plays, from, to, metric, showThumbs, onPick, isMusic, unit }: Props) {
   const rows = useMemo(() => topPerPeriod(plays, from, to, unit, metric), [plays, from, to, unit, metric]);
   const label = (period: string) => (unit === 'month' ? fmtMonth(period) : period);
@@ -63,6 +142,7 @@ export default function PeriodTable({ plays, from, to, metric, showThumbs, onPic
         metric === 'plays' ? 'plays' : 'time'
       }. Click one to focus on it.`}
     >
+      <StorySwitch story={<StoryPeriods rows={rows} label={label} metric={metric} isMusic={isMusic} showThumbs={showThumbs} />}>
       <div className="pt-wrap">
         <table className="pt">
           <thead>
@@ -88,6 +168,7 @@ export default function PeriodTable({ plays, from, to, metric, showThumbs, onPic
           </tbody>
         </table>
       </div>
+      </StorySwitch>
     </Card>
   );
 }
