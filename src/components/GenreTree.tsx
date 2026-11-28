@@ -7,6 +7,7 @@ import {
   buildTree,
   flattenTree,
   layoutTree,
+  LEVELS,
   reveal,
   searchTree,
   type Level,
@@ -32,8 +33,10 @@ const GAP = 64;
 const PAD = 8;
 /** Thickest branch (the trunk leaving "All music"), in pixels. */
 const MAX_W = 22;
-const WIDTHS = [136, 170, 190, 190, 200, 220];
-const XS = WIDTHS.map((_, d) => PAD + WIDTHS.slice(0, d).reduce((s, w) => s + w + GAP, 0));
+const WIDTH: Record<Level, number> = { root: 136, genre: 170, subgenre: 190, artist: 190, album: 200, track: 220 };
+/** Albums and tracks also show their artist when the artist level is hidden, so they get more room. */
+const BY_EXTRA = 70;
+type Shown = Exclude<Level, 'root'>;
 const LEVEL_NAME: Record<Level, string> = {
   root: 'All',
   genre: 'Genre',
@@ -47,12 +50,44 @@ const fmtVal = (plays: number, hours: number, metric: Metric) =>
   metric === 'plays' ? fmtInt(plays) : fmtHours(hours);
 
 export default function GenreTree({ plays, genres, metric, note, onVisible }: Props) {
-  const root = useMemo(() => buildTree(plays, genres), [plays, genres]);
+  const [shown, setShown] = useState<Set<Shown>>(() => new Set(LEVELS));
+  const levels = useMemo(() => LEVELS.filter((l) => shown.has(l)), [shown]);
+  const levelsKey = levels.join();
+  const root = useMemo(() => buildTree(plays, genres, levels), [plays, genres, levels]);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(['root']));
   const [limits, setLimits] = useState<Map<string, number>>(() => new Map());
   const [hit, setHit] = useState<string | null>(null);
   const [scrollTo, setScrollTo] = useState<string | null>(null);
-  useEffect(() => setExpanded((e) => autoExpand(root, e)), [root]);
+  // New data keeps what's open; a different set of levels starts again from the top.
+  const lastLevels = useRef(levelsKey);
+  useEffect(() => {
+    if (lastLevels.current !== levelsKey) {
+      lastLevels.current = levelsKey;
+      setLimits(new Map());
+      setHit(null);
+      setExpanded(autoExpand(root, new Set()));
+    } else setExpanded((e) => autoExpand(root, e));
+  }, [root, levelsKey]);
+
+  const toggleLevel = (l: Shown) =>
+    setShown((s) => {
+      const next = new Set(s);
+      if (next.has(l)) {
+        if (next.size > 1) next.delete(l);
+      } else next.add(l);
+      return next;
+    });
+
+  // Column positions for the levels being shown.
+  const { WIDTHS, XS } = useMemo(() => {
+    const byArtist = !levels.includes('artist');
+    const WIDTHS = (['root', ...levels] as Level[]).map(
+      (l) => WIDTH[l] + (byArtist && (l === 'album' || l === 'track') ? BY_EXTRA : 0),
+    );
+    const XS = WIDTHS.map((_, d) => PAD + WIDTHS.slice(0, d).reduce((s, w) => s + w + GAP, 0));
+    return { WIDTHS, XS };
+  }, [levels]);
+  const last = levels.length;
 
   const layout = useMemo(() => layoutTree(root, expanded, limits, metric, LIMIT), [root, expanded, limits, metric]);
   const scale = root[metric] > 0 ? MAX_W / root[metric] : 0;
@@ -116,7 +151,7 @@ export default function GenreTree({ plays, genres, metric, note, onVisible }: Pr
     setHit(null);
   };
 
-  const width = XS[5] + WIDTHS[5] + PAD;
+  const width = XS[last] + WIDTHS[last] + PAD;
   const height = Math.max(layout.rows, 1) * ROW + PAD * 2;
   const cy = (y: number) => PAD + y * ROW + ROW / 2;
 
@@ -126,7 +161,7 @@ export default function GenreTree({ plays, genres, metric, note, onVisible }: Pr
       title="Genre tree"
       subtitle={
         note ??
-        `Genre → sub-genre → artist → album → track. Click a box to open it. Branch thickness and order follow ${
+        `${levels.map((l) => LEVEL_NAME[l]).join(' → ')}. Click a box to open it. Branch thickness and order follow ${
           metric === 'plays' ? 'plays' : 'time listened'
         }.`
       }
@@ -140,12 +175,30 @@ export default function GenreTree({ plays, genres, metric, note, onVisible }: Pr
       }
     >
       <div ref={wrap}>
+        <div className="tree-levels" role="group" aria-label="Levels to show">
+          <span className="muted">Levels</span>
+          {LEVELS.map((l) => {
+            const on = shown.has(l);
+            return (
+              <button
+                key={l}
+                className={`chip${on ? ' on' : ''}`}
+                aria-pressed={on}
+                disabled={on && shown.size === 1}
+                onClick={() => toggleLevel(l)}
+                title={on ? `Skip the ${LEVEL_NAME[l].toLowerCase()} level` : `Show the ${LEVEL_NAME[l].toLowerCase()} level`}
+              >
+                {LEVEL_NAME[l]}
+              </button>
+            );
+          })}
+        </div>
         {root.plays === 0 ? (
           <p className="empty">Nothing in this range.</p>
         ) : (
           <div className="tree-scroll">
             <div className="tree-cols" style={{ width }}>
-              {(['genre', 'subgenre', 'artist', 'album', 'track'] as Level[]).map((l, i) => (
+              {levels.map((l, i) => (
                 <span key={l} style={{ left: XS[i + 1], width: WIDTHS[i + 1] }}>
                   {LEVEL_NAME[l]}
                 </span>
@@ -184,11 +237,14 @@ export default function GenreTree({ plays, genres, metric, note, onVisible }: Pr
                     style={{ left: XS[depth], top: cy(y) - CHIP / 2, width: WIDTHS[depth], height: CHIP }}
                     onClick={() => toggle(n)}
                     aria-expanded={n.children.length ? open : undefined}
-                    title={`${LEVEL_NAME[n.level]}: ${n.name}\n${fmtInt(n.plays)} plays · ${fmtHours(n.hours)}${
+                    title={`${LEVEL_NAME[n.level]}: ${n.name}${n.by ? ` by ${n.by}` : ''}\n${fmtInt(n.plays)} plays · ${fmtHours(n.hours)}${
                       n.parent ? `\n${Math.round(share * 100)}% of ${n.parent.name}` : ''
                     }${n.children.length ? `\n${n.children.length} ${n.children.length === 1 ? 'item' : 'items'} inside` : ''}`}
                   >
-                    <span className="tree-name">{n.name}</span>
+                    <span className="tree-name">
+                      {n.name}
+                      {n.by && <span className="tree-by"> · {n.by}</span>}
+                    </span>
                     <span className="tree-val">{fmtVal(n.plays, n.hours, metric)}</span>
                     {n.children.length > 0 && <span className="tree-caret">{open ? '−' : '+'}</span>}
                   </button>

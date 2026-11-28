@@ -3,11 +3,14 @@ import { HOUR_MS, type GenreMap, type Metric } from './stats';
 import { norm } from './genre-core';
 
 export type Level = 'root' | 'genre' | 'subgenre' | 'artist' | 'album' | 'track';
-export const LEVELS: Level[] = ['root', 'genre', 'subgenre', 'artist', 'album', 'track'];
+/** The levels below the root, left to right. */
+export const LEVELS: Exclude<Level, 'root'>[] = ['genre', 'subgenre', 'artist', 'album', 'track'];
 
 export interface TreeNode {
   id: string;
   name: string;
+  /** Artist name, for an album or track when the artist level is hidden. */
+  by?: string;
   level: Level;
   depth: number;
   plays: number;
@@ -21,48 +24,66 @@ export const UNSORTED = 'Not classified';
 const NO_ALBUM = 'Unknown album';
 const SEP = '\u0001';
 
-function child(parent: TreeNode, name: string, index: Map<string, TreeNode>): TreeNode {
-  const id = parent.id + SEP + name;
-  let n = index.get(id);
-  if (!n) {
-    n = { id, name, level: LEVELS[parent.depth + 1], depth: parent.depth + 1, plays: 0, hours: 0, parent, children: [] };
-    index.set(id, n);
-    parent.children.push(n);
+/** What a play is grouped under at one level: a key that keeps same-named things apart, and what to show. */
+function keyAt(p: Play, level: Exclude<Level, 'root'>, genres: GenreMap): [string, string] {
+  switch (level) {
+    case 'genre': {
+      const g = genres.get(p.artist)?.top ?? UNSORTED;
+      return [g, g];
+    }
+    case 'subgenre': {
+      const s = genres.get(p.artist)?.sub ?? UNSORTED;
+      return [s, s];
+    }
+    case 'artist':
+      return [p.artist, p.artist];
+    case 'album': {
+      const a = p.album || NO_ALBUM;
+      return [p.artist + SEP + a, a];
+    }
+    case 'track':
+      return [p.artist + SEP + p.track, p.track];
   }
-  return n;
 }
 
-/** Genre → sub-genre → artist → album → track, with play counts and hours summed at every level. */
-export function buildTree(plays: Play[], genres: GenreMap): TreeNode {
+/**
+ * Builds the tree through the chosen levels (any of genre → sub-genre → artist → album → track, in that order),
+ * with play counts and hours summed at every node. Skipping a level joins the levels on either side of it.
+ */
+export function buildTree(plays: Play[], genres: GenreMap, levels: Exclude<Level, 'root'>[] = LEVELS): TreeNode {
   const root: TreeNode = { id: 'root', name: 'All music', level: 'root', depth: 0, plays: 0, hours: 0, parent: null, children: [] };
   const index = new Map<string, TreeNode>();
-  // Artists repeat a lot, so remember each artist's node instead of walking genre → sub-genre every time.
-  const artistNode = new Map<string, TreeNode>();
+  const showBy = !levels.includes('artist');
   for (const p of plays) {
-    let a = artistNode.get(p.artist);
-    if (!a) {
-      const g = genres.get(p.artist);
-      const gn = child(root, g?.top ?? UNSORTED, index);
-      const sn = child(gn, g?.sub ?? UNSORTED, index);
-      a = child(sn, p.artist, index);
-      artistNode.set(p.artist, a);
+    let n = root;
+    for (const level of levels) {
+      const [key, name] = keyAt(p, level, genres);
+      const id = n.id + SEP + key;
+      let c = index.get(id);
+      if (!c) {
+        c = { id, name, level, depth: n.depth + 1, plays: 0, hours: 0, parent: n, children: [] };
+        if (showBy && (level === 'album' || level === 'track')) c.by = p.artist;
+        index.set(id, c);
+        n.children.push(c);
+      }
+      n = c;
     }
-    const al = child(a, p.album || NO_ALBUM, index);
-    const tr = child(al, p.track, index);
     const h = p.ms / HOUR_MS;
-    for (let n: TreeNode | null = tr; n; n = n.parent) {
-      n.plays++;
-      n.hours += h;
+    for (let m: TreeNode | null = n; m; m = m.parent) {
+      m.plays++;
+      m.hours += h;
     }
   }
   return root;
 }
 
+const isGenreLevel = (n: TreeNode) => n.level === 'genre' || n.level === 'subgenre';
+
 /** Children biggest first by the chosen metric. "Not classified" always goes last. */
 export function sortedChildren(n: TreeNode, metric: Metric): TreeNode[] {
   return [...n.children].sort(
     (a, b) =>
-      Number(a.name === UNSORTED && a.depth <= 2) - Number(b.name === UNSORTED && b.depth <= 2) ||
+      Number(a.name === UNSORTED && isGenreLevel(a)) - Number(b.name === UNSORTED && isGenreLevel(b)) ||
       b[metric] - a[metric] ||
       b.plays - a.plays ||
       a.name.localeCompare(b.name),
@@ -196,7 +217,8 @@ export function flattenTree(root: TreeNode): { node: TreeNode; key: string }[] {
 export function pathOf(n: TreeNode): string {
   const parts: string[] = [];
   for (let p = n.parent; p && p.parent; p = p.parent) parts.unshift(p.name);
-  return parts.join(' › ');
+  const path = parts.join(' › ');
+  return n.by ? (path ? `${path} · by ${n.by}` : `by ${n.by}`) : path;
 }
 
 /** Exact names first, then names with a word starting with the query, then any match; most played first within each. */

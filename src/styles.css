@@ -270,3 +270,7 @@ code { font-size: 0.9em; background: var(--accent-soft); padding: 1px 5px; borde
 .tree-val { flex: none; color: var(--text-2); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
 .tree-caret { flex: none; width: 14px; text-align: center; color: var(--accent); font-weight: 600; }
 @media (prefers-reduced-motion: reduce) { .tree-link, .tree-node { transition: none; } }
+.tree-levels { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; font-size: 0.87rem; }
+.tree-levels .muted { margin: 0 4px 0 0; }
+.tree-levels .chip:disabled { opacity: 0.6; cursor: not-allowed; }
+.tree-by { color: var(--text-2); }
